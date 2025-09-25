@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+
+{% block title %}Registro General - Sistema de Registro{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-header text-center bg-success text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-user-plus me-2"></i>
+                    Registro General
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <div class="scanner-area" id="scannerArea">
+                        <i class="fas fa-qrcode fa-5x text-muted mb-3"></i>
+                        <p class="text-muted">Escanea el código de barras del DNI</p>
+                        <button class="btn btn-outline-primary" onclick="startScanner()">
+                            <i class="fas fa-camera me-2"></i>
+                            Activar Escáner
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Manual Input -->
+                <div class="border-top pt-4">
+                    <h6 class="text-center mb-3">O ingresa manualmente</h6>
+                    <form id="registerForm">
+                        <div class="mb-3">
+                            <label for="dni" class="form-label">DNI</label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-id-card"></i>
+                                </span>
+                                <input type="text" 
+                                       class="form-control form-control-lg" 
+                                       id="dni" 
+                                       placeholder="Ingresa el DNI"
+                                       maxlength="8"
+                                       pattern="[0-9]{8}"
+                                       autocomplete="off">
+                            </div>
+                            <div class="form-text">Ingresa 8 dígitos del DNI</div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="button" 
+                                    class="btn btn-primary btn-lg" 
+                                    id="searchBtn"
+                                    onclick="searchAttendee()">
+                                <i class="fas fa-search me-2"></i>
+                                Buscar Participante
+                            </button>
+                            
+                            <button type="button" 
+                                    class="btn btn-success btn-lg" 
+                                    id="registerBtn"
+                                    onclick="registerAttendance()"
+                                    style="display: none;">
+                                <i class="fas fa-check me-2"></i>
+                                Registrar Asistencia
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendee Info Card -->
+        <div class="card mt-4" id="attendeeCard" style="display: none;">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-user me-2"></i>
+                    Información del Participante
+                </h6>
+            </div>
+            <div class="card-body" id="attendeeInfo">
+                <!-- Se llenará dinámicamente -->
+            </div>
+        </div>
+
+        <!-- Recent Registrations -->
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-clock me-2"></i>
+                    Registros Recientes
+                </h6>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearRecentRegistrations()">
+                    <i class="fas fa-trash me-1"></i>
+                    Limpiar
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="recentRegistrations" class="list-group list-group-flush">
+                    <div class="text-center text-muted py-3">
+                        No hay registros recientes
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scanner Modal -->
+<div class="modal fade" id="scannerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-qrcode me-2"></i>
+                    Escáner de Códigos de Barras
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="scanner" style="width: 100%; height: 400px;"></div>
+                <div class="text-center mt-3">
+                    <p class="text-muted">Coloca el código de barras del DNI frente a la cámara</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script>
+let currentAttendee = null;
+let recentRegistrations = JSON.parse(localStorage.getItem('recentRegistrations') || '[]');
+
+document.addEventListener('DOMContentLoaded', function() {
+    displayRecentRegistrations();
+    
+    // Auto-focus DNI input
+    document.getElementById('dni').focus();
+    
+    // Enter key handler
+    document.getElementById('dni').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            searchAttendee();
+        }
+    });
+    
+    // Format DNI input
+    document.getElementById('dni').addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length > 8) {
+            value = value.substring(0, 8);
+        }
+        e.target.value = value;
+    });
+});
+
+async function searchAttendee() {
+    const dni = document.getElementById('dni').value.trim();
+    
+    if (!dni || dni.length !== 8) {
+        showToast('Error', 'Ingresa un DNI válido de 8 dígitos', 'error');
+        return;
+    }
+    
+    showLoading(true);
+    
+    try {
+        const response = await fetch(`/api/v1/attendees/search/${dni}`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            currentAttendee = result.data;
+            displayAttendeeInfo(result.data);
+            
+            // Verificar si ya tiene asistencia general
+            if (result.data.asistencia_general) {
+                showToast('Información', 'Este participante ya tiene asistencia general registrada', 'warning');
+                document.getElementById('registerBtn').style.display = 'none';
+            } else {
+                document.getElementById('registerBtn').style.display = 'block';
+            }
+        } else {
+            showToast('No encontrado', 'Participante no encontrado en la base de datos', 'warning');
+            hideAttendeeCard();
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error', 'Error al buscar participante', 'error');
+        hideAttendeeCard();
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function registerAttendance() {
+    if (!currentAttendee) {
+        showToast('Error', 'Primero busca un participante', 'error');
+        return;
+    }
+    
+    showLoading(true);
+    
+    try {
+        const response = await fetch('/api/v1/attendees/general', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                dni: currentAttendee.dni
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('Éxito', 'Asistencia registrada exitosamente', 'success');
+            
+            // Agregar a registros recientes
+            addToRecentRegistrations({
+                dni: currentAttendee.dni,
+                nombre: currentAttendee.nombre,
+                timestamp: new Date().toLocaleString()
+            });
+            
+            // Limpiar formulario
+            clearForm();
+            
+            // Hacer vibrar el teléfono si está disponible
+            if (navigator.vibrate) {
+                navigator.vibrate(200);
+            }
+        } else {
+            showToast('Error', result.message || 'Error al registrar asistencia', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error', 'Error al registrar asistencia', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function displayAttendeeInfo(data) {
+    const card = document.getElementById('attendeeCard');
+    const info = document.getElementById('attendeeInfo');
+    
+    // Crear HTML para información básica
+    let html = `
+        <div class="row">
+            <div class="col-12">
+                <h5>${data.nombre}</h5>
+                <p class="text-muted mb-3">DNI: ${data.dni}</p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-6 col-md-3">
+                <div class="text-center">
+                    <div class="badge ${data.asistencia_general ? 'bg-success' : 'bg-secondary'} mb-1">
+                        ${data.asistencia_general ? 'SÍ' : 'NO'}
+                    </div>
+                    <div class="small text-muted">General</div>
+                </div>
+            </div>
+    `;
+    
+    // Agregar ponencias dinámicamente (excluyendo 'dni', 'nombre', 'asistencia_general')
+    const sessionFields = Object.keys(data).filter(key => 
+        !['dni', 'nombre', 'asistencia_general'].includes(key)
+    );
+    
+    // Determinar clases de columna basado en número de ponencias
+    const totalColumns = sessionFields.length + 1; // +1 por asistencia general
+    const colClass = totalColumns <= 4 ? 'col-6 col-md-3' : 
+                     totalColumns <= 6 ? 'col-6 col-md-2' : 
+                     'col-4 col-md-2';
+    
+    // Actualizar clase de columna de asistencia general
+    html = html.replace('col-6 col-md-3', colClass);
+    
+    sessionFields.forEach(sessionKey => {
+        const sessionName = formatSessionName(sessionKey);
+        html += `
+            <div class="${colClass}">
+                <div class="text-center">
+                    <div class="badge ${data[sessionKey] ? 'bg-success' : 'bg-secondary'} mb-1">
+                        ${data[sessionKey] ? 'SÍ' : 'NO'}
+                    </div>
+                    <div class="small text-muted text-truncate" title="${sessionName}">${sessionName}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `</div>`;
+    
+    info.innerHTML = html;
+    card.style.display = 'block';
+}
+
+function formatSessionName(sessionKey) {
+    // Convertir nombres de campo como "ponencia_1" o "session_id_123" a nombres legibles
+    if (sessionKey.startsWith('ponencia_')) {
+        return sessionKey.replace('ponencia_', 'Ponencia ').replace('_', ' ');
+    }
+    if (sessionKey.startsWith('session_')) {
+        return sessionKey.replace('session_', 'Sesión ').replace(/_/g, ' ');
+    }
+    // Para otros formatos, intentar hacer legible
+    return sessionKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function hideAttendeeCard() {
+    document.getElementById('attendeeCard').style.display = 'none';
+    document.getElementById('registerBtn').style.display = 'none';
+    currentAttendee = null;
+}
+
+function clearForm() {
+    document.getElementById('dni').value = '';
+    hideAttendeeCard();
+    document.getElementById('dni').focus();
+}
+
+function addToRecentRegistrations(registration) {
+    recentRegistrations.unshift(registration);
+    if (recentRegistrations.length > 10) {
+        recentRegistrations = recentRegistrations.slice(0, 10);
+    }
+    localStorage.setItem('recentRegistrations', JSON.stringify(recentRegistrations));
+    displayRecentRegistrations();
+}
+
+function displayRecentRegistrations() {
+    const container = document.getElementById('recentRegistrations');
+    
+    if (recentRegistrations.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-3">
+                No hay registros recientes
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = recentRegistrations.map(reg => `
+        <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h6 class="mb-1">${reg.nombre}</h6>
+                    <p class="mb-1 text-muted small">DNI: ${reg.dni}</p>
+                </div>
+                <small class="text-muted">${reg.timestamp}</small>
+            </div>
+        </div>
+    `).join('');
+}
+
+function clearRecentRegistrations() {
+    if (confirm('¿Estás seguro de que quieres limpiar los registros recientes?')) {
+        recentRegistrations = [];
+        localStorage.setItem('recentRegistrations', JSON.stringify(recentRegistrations));
+        displayRecentRegistrations();
+        showToast('Éxito', 'Registros recientes eliminados', 'success');
+    }
+}
+
+function startScanner() {
+    const modal = new bootstrap.Modal(document.getElementById('scannerModal'));
+    modal.show();
+    
+    // Inicializar escáner cuando se abre el modal
+    document.getElementById('scannerModal').addEventListener('shown.bs.modal', function() {
+        initializeScanner();
+    });
+    
+    // Detener escáner cuando se cierra el modal
+    document.getElementById('scannerModal').addEventListener('hidden.bs.modal', function() {
+        stopScanner();
+    });
+}
+
+function initializeScanner() {
+    Quagga.init({
+        inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: document.querySelector('#scanner')
+        },
+        decoder: {
+            readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader"]
+        }
+    }, function(err) {
+        if (err) {
+            console.log(err);
+            showToast('Error', 'No se pudo inicializar el escáner', 'error');
+            return;
+        }
+        Quagga.start();
+    });
+    
+    Quagga.onDetected(function(data) {
+        const code = data.codeResult.code;
+        console.log('Código detectado:', code);
+        
+        // Extraer DNI del código (asumiendo que el DNI está en el código)
+        const dni = extractDNIFromCode(code);
+        if (dni) {
+            document.getElementById('dni').value = dni;
+            bootstrap.Modal.getInstance(document.getElementById('scannerModal')).hide();
+            searchAttendee();
+        }
+    });
+}
+
+function stopScanner() {
+    Quagga.stop();
+}
+
+function extractDNIFromCode(code) {
+    // Esta función debe adaptarse según el formato del código de barras del DNI
+    // Por ahora, asumimos que el código contiene solo números y extraemos los primeros 8
+    const numbers = code.replace(/\D/g, '');
+    if (numbers.length >= 8) {
+        return numbers.substring(0, 8);
+    }
+    return null;
+}
+</script>
+{% endblock %}

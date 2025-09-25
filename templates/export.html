@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+
+{% block title %}Exportar Datos - Sistema de Registro{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-header text-center bg-warning text-dark">
+                <h4 class="mb-0">
+                    <i class="fas fa-download me-2"></i>
+                    Exportar Datos
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <i class="fas fa-file-export fa-5x text-warning mb-3"></i>
+                    <p class="text-muted">Descarga un reporte completo con todos los datos de asistencia</p>
+                </div>
+
+                <!-- Export Options -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <h6>Opciones de exportación</h6>
+                    </div>
+                    
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-table fa-2x text-success me-3"></i>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">Datos Completos (CSV)</h6>
+                                        <p class="text-muted small mb-0">
+                                            Incluye: DNI, Nombre, Asistencia General, Ponencia 1, Ponencia 2, Ponencia 3
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button class="btn btn-success btn-lg w-100" onclick="exportData('csv')">
+                                        <i class="fas fa-file-csv me-2"></i>
+                                        Descargar CSV
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-code fa-2x text-info me-3"></i>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">Datos JSON</h6>
+                                        <p class="text-muted small mb-0">
+                                            Formato estructurado para desarrolladores y análisis avanzado
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button class="btn btn-info btn-lg w-100" onclick="exportData('json')">
+                                        <i class="fas fa-file-code me-2"></i>
+                                        Ver/Descargar JSON
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics Preview -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-chart-pie me-2"></i>
+                            Estadísticas Actuales
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="statisticsPreview" class="row g-3">
+                            <!-- Se llenará dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export History -->
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-history me-2"></i>
+                    Historial de Exportaciones
+                </h6>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearExportHistory()">
+                    <i class="fas fa-trash me-1"></i>
+                    Limpiar
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="exportHistory" class="list-group list-group-flush">
+                    <div class="text-center text-muted py-3">
+                        No hay exportaciones recientes
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JSON Preview Modal -->
+<div class="modal fade" id="jsonPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-code me-2"></i>
+                    Vista Previa JSON
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <button class="btn btn-primary" onclick="copyJsonToClipboard()">
+                        <i class="fas fa-copy me-2"></i>
+                        Copiar al Portapapeles
+                    </button>
+                    <button class="btn btn-success" onclick="downloadJsonFile()">
+                        <i class="fas fa-download me-2"></i>
+                        Descargar Archivo
+                    </button>
+                </div>
+                <pre id="jsonContent" class="border rounded p-3" style="max-height: 60vh; overflow-y: auto; background-color: #f8f9fa;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentJsonData = null;
+let exportHistory = JSON.parse(localStorage.getItem('exportHistory') || '[]');
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadStatistics();
+    displayExportHistory();
+    
+    // Auto-refresh statistics every 30 seconds
+    setInterval(loadStatistics, 30000);
+});
+
+async function exportData(format) {
+    showLoading(true);
+    
+    try {
+        if (format === 'csv') {
+            // Para CSV, redirigir directamente al endpoint
+            const link = document.createElement('a');
+            link.href = '/api/v1/attendees/export';
+            link.download = `asistentes_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Registrar en historial
+            addToExportHistory('CSV', 'Exportación completa en formato CSV');
+            
+            showToast('Éxito', 'Archivo CSV descargado exitosamente', 'success');
+            
+        } else if (format === 'json') {
+            const response = await fetch('/api/v1/attendees/export');
+            const result = await response.json();
+            
+            if (result.success) {
+                currentJsonData = result.data;
+                document.getElementById('jsonContent').textContent = JSON.stringify(result.data, null, 2);
+                
+                const modal = new bootstrap.Modal(document.getElementById('jsonPreviewModal'));
+                modal.show();
+                
+                // Registrar en historial
+                addToExportHistory('JSON', 'Exportación en formato JSON');
+                
+            } else {
+                showToast('Error', result.message || 'Error al exportar datos', 'error');
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error', 'Error al exportar datos', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function loadStatistics() {
+    try {
+        // Cargar tanto la capacidad como la lista de sesiones
+        const [capacityResponse, sessionsResponse] = await Promise.all([
+            fetch('/api/v1/sessions/capacity'),
+            fetch('/api/v1/sessions')
+        ]);
+        
+        const capacityResult = await capacityResponse.json();
+        const sessionsResult = await sessionsResponse.json();
+        
+        if (capacityResult.success) {
+            const sessionsList = sessionsResult.success ? sessionsResult.data : [];
+            displayStatistics(capacityResult.data, sessionsList);
+        }
+        
+    } catch (error) {
+        console.error('Error loading statistics:', error);
+    }
+}
+
+function displayStatistics(capacityData, sessionsList = []) {
+    const container = document.getElementById('statisticsPreview');
+    
+    const sessions = Object.keys(capacityData);
+    if (sessions.length === 0) {
+        container.innerHTML = '<div class="col-12 text-center text-muted py-3">No hay ponencias configuradas</div>';
+        return;
+    }
+    
+    // Calcular estadísticas
+    let totalCapacity = 0;
+    let totalUsed = 0;
+    let sessionStats = [];
+    
+    sessions.forEach(sessionId => {
+        const data = capacityData[sessionId];
+        const used = data.total - data.available;
+        const sessionInfo = sessionsList.find(s => s.id === sessionId) || { name: sessionId };
+        
+        totalCapacity += data.total;
+        totalUsed += used;
+        
+        sessionStats.push({
+            id: sessionId,
+            name: sessionInfo.name || data.name || sessionId,
+            used: used,
+            total: data.total,
+            available: data.available,
+            percentage: data.total > 0 ? Math.round((used / data.total) * 100) : 0
+        });
+    });
+    
+    const generalAttendance = totalUsed; // Simplificado para el ejemplo
+    
+    container.innerHTML = `
+        <!-- Resumen General -->
+        <div class="col-12">
+            <div class="row g-2">
+                <div class="col-6 col-md-3">
+                    <div class="card bg-primary text-white text-center">
+                        <div class="card-body py-2">
+                            <div class="h4 mb-0">${generalAttendance}</div>
+                            <small>Asistencia General</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card bg-success text-white text-center">
+                        <div class="card-body py-2">
+                            <div class="h4 mb-0">${totalUsed}</div>
+                            <small>En Ponencias</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card bg-info text-white text-center">
+                        <div class="card-body py-2">
+                            <div class="h4 mb-0">${totalCapacity - totalUsed}</div>
+                            <small>Cupos Disponibles</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card bg-warning text-dark text-center">
+                        <div class="card-body py-2">
+                            <div class="h4 mb-0">${totalCapacity}</div>
+                            <small>Capacidad Total</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Detalles por Ponencia -->
+        <div class="col-12">
+            <h6 class="mt-2 mb-2">Detalles por Ponencia</h6>
+            <div class="row g-2">
+                ${sessionStats.length === 0 ? 
+                    '<div class="col-12 text-center text-muted py-3">No hay ponencias configuradas</div>' :
+                    sessionStats.map(stat => {
+                        // Determinar clase de columna basado en número de ponencias
+                        const colClass = sessionStats.length <= 2 ? 'col-12 col-md-6' : 
+                                         sessionStats.length <= 3 ? 'col-12 col-md-4' : 
+                                         sessionStats.length <= 4 ? 'col-12 col-md-6 col-lg-3' : 
+                                         'col-12 col-md-4 col-lg-2';
+                        
+                        return `
+                            <div class="${colClass}">
+                                <div class="card">
+                                    <div class="card-body text-center py-2">
+                                        <h6 class="card-title mb-1 text-truncate" title="${stat.name}">${stat.name}</h6>
+                                        <div class="progress mb-1" style="height: 6px;">
+                                            <div class="progress-bar ${stat.percentage > 70 ? 'bg-danger' : (stat.percentage > 40 ? 'bg-warning' : 'bg-success')}" 
+                                                 style="width: ${stat.percentage}%">
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">${stat.used}/${stat.total} (${stat.percentage}%)</small>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')
+                }
+            </div>
+        </div>
+        
+        <!-- Última Actualización -->
+        <div class="col-12">
+            <div class="text-center text-muted mt-2">
+                <small>
+                    <i class="fas fa-clock me-1"></i>
+                    Última actualización: ${new Date().toLocaleString()}
+                </small>
+            </div>
+        </div>
+    `;
+}
+
+function copyJsonToClipboard() {
+    if (currentJsonData) {
+        const jsonString = JSON.stringify(currentJsonData, null, 2);
+        navigator.clipboard.writeText(jsonString).then(() => {
+            showToast('Éxito', 'JSON copiado al portapapeles', 'success');
+        }).catch(() => {
+            showToast('Error', 'Error al copiar al portapapeles', 'error');
+        });
+    }
+}
+
+function downloadJsonFile() {
+    if (currentJsonData) {
+        const jsonString = JSON.stringify(currentJsonData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `asistentes_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        showToast('Éxito', 'Archivo JSON descargado exitosamente', 'success');
+    }
+}
+
+function addToExportHistory(type, description) {
+    const export_record = {
+        type: type,
+        description: description,
+        timestamp: new Date().toLocaleString(),
+        id: Date.now()
+    };
+    
+    exportHistory.unshift(export_record);
+    if (exportHistory.length > 20) {
+        exportHistory = exportHistory.slice(0, 20);
+    }
+    
+    localStorage.setItem('exportHistory', JSON.stringify(exportHistory));
+    displayExportHistory();
+}
+
+function displayExportHistory() {
+    const container = document.getElementById('exportHistory');
+    
+    if (exportHistory.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-3">
+                No hay exportaciones recientes
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = exportHistory.map(record => `
+        <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="d-flex align-items-center mb-1">
+                        <span class="badge ${record.type === 'CSV' ? 'bg-success' : 'bg-info'} me-2">
+                            ${record.type}
+                        </span>
+                        <h6 class="mb-0">${record.description}</h6>
+                    </div>
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        ${record.timestamp}
+                    </small>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeExportRecord(${record.id})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function removeExportRecord(id) {
+    exportHistory = exportHistory.filter(record => record.id !== id);
+    localStorage.setItem('exportHistory', JSON.stringify(exportHistory));
+    displayExportHistory();
+}
+
+function clearExportHistory() {
+    if (confirm('¿Estás seguro de que quieres limpiar el historial de exportaciones?')) {
+        exportHistory = [];
+        localStorage.setItem('exportHistory', JSON.stringify(exportHistory));
+        displayExportHistory();
+        showToast('Éxito', 'Historial de exportaciones eliminado', 'success');
+    }
+}
+</script>
+{% endblock %}

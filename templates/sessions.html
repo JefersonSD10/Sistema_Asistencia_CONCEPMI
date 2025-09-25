@@ -1,0 +1,604 @@
+{% extends "base.html" %}
+
+{% block title %}Ponencias - Sistema de Registro{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+        <div class="card shadow">
+            <div class="card-header text-center bg-info text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    Registro a Ponencias
+                </h4>
+            </div>
+            <div class="card-body">
+                <!-- Scanner Section -->
+                <div class="text-center mb-4">
+                    <div class="scanner-area" id="scannerArea">
+                        <i class="fas fa-qrcode fa-4x text-muted mb-3"></i>
+                        <p class="text-muted">Escanea el DNI del participante</p>
+                        <button class="btn btn-outline-primary" onclick="startScanner()">
+                            <i class="fas fa-camera me-2"></i>
+                            Activar Escáner
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Manual Input -->
+                <div class="border-top pt-4">
+                    <h6 class="text-center mb-3">O busca manualmente</h6>
+                    <div class="mb-3">
+                        <label for="dni" class="form-label">DNI</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-id-card"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control form-control-lg" 
+                                   id="dni" 
+                                   placeholder="Ingresa el DNI"
+                                   maxlength="8"
+                                   pattern="[0-9]{8}"
+                                   autocomplete="off">
+                            <button class="btn btn-primary" onclick="searchAttendee()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">Ingresa 8 dígitos del DNI</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendee Info Card -->
+        <div class="card mt-4" id="attendeeCard" style="display: none;">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-user me-2"></i>
+                    Información del Participante
+                </h6>
+            </div>
+            <div class="card-body" id="attendeeInfo">
+                <!-- Se llenará dinámicamente -->
+            </div>
+        </div>
+
+        <!-- Sessions Selection -->
+        <div class="card mt-4" id="sessionsCard" style="display: none;">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-calendar me-2"></i>
+                    Selecciona Ponencia
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="sessionsList" class="row g-3">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Capacity Overview -->
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Estado de Ponencias
+                </h6>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadCapacityInfo()">
+                    <i class="fas fa-sync me-1"></i>
+                    Actualizar
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="capacityOverview" class="row g-3">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scanner Modal -->
+<div class="modal fade" id="scannerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-qrcode me-2"></i>
+                    Escáner de Códigos de Barras
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="scanner" style="width: 100%; height: 400px;"></div>
+                <div class="text-center mt-3">
+                    <p class="text-muted">Coloca el código de barras del DNI frente a la cámara</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle me-2"></i>
+                    Confirmar Registro
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="confirmationBody">
+                <!-- Se llenará dinámicamente -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+                <button type="button" class="btn btn-success" id="confirmRegisterBtn">
+                    <i class="fas fa-check me-2"></i>
+                    Confirmar Registro
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script>
+let currentAttendee = null;
+let sessionsCapacity = {};
+let sessionsList = [];
+let selectedSession = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSessionsList();
+    loadCapacityInfo();
+    document.getElementById('dni').focus();
+    
+    // Auto-refresh capacity every 30 seconds
+    setInterval(loadCapacityInfo, 30000);
+    
+    // Enter key handler
+    document.getElementById('dni').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            searchAttendee();
+        }
+    });
+    
+    // Format DNI input
+    document.getElementById('dni').addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length > 8) {
+            value = value.substring(0, 8);
+        }
+        e.target.value = value;
+    });
+});
+
+async function searchAttendee() {
+    const dni = document.getElementById('dni').value.trim();
+    
+    if (!dni || dni.length !== 8) {
+        showToast('Error', 'Ingresa un DNI válido de 8 dígitos', 'error');
+        return;
+    }
+    
+    showLoading(true);
+    
+    try {
+        const response = await fetch(`/api/v1/attendees/search/${dni}`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            currentAttendee = result.data;
+            displayAttendeeInfo(result.data);
+            
+            // Verificar si tiene asistencia general
+            if (!result.data.asistencia_general) {
+                showToast('Error', 'El participante debe registrar asistencia general primero', 'error');
+                hideSessionsCard();
+            } else {
+                displaySessionsSelection(result.data);
+            }
+        } else {
+            showToast('No encontrado', 'Participante no encontrado en la base de datos', 'warning');
+            hideAttendeeCard();
+            hideSessionsCard();
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error', 'Error al buscar participante', 'error');
+        hideAttendeeCard();
+        hideSessionsCard();
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function loadSessionsList() {
+    try {
+        const response = await fetch('/api/v1/sessions');
+        const result = await response.json();
+        
+        if (result.success) {
+            sessionsList = result.data;
+        } else {
+            console.error('Error loading sessions list:', result.message);
+            sessionsList = [];
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        sessionsList = [];
+    }
+}
+
+function displayAttendeeInfo(data) {
+    const card = document.getElementById('attendeeCard');
+    const info = document.getElementById('attendeeInfo');
+    
+    // Crear HTML para información básica
+    let html = `
+        <div class="row">
+            <div class="col-12">
+                <h5>${data.nombre}</h5>
+                <p class="text-muted mb-3">DNI: ${data.dni}</p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-6 col-md-3">
+                <div class="text-center">
+                    <div class="badge ${data.asistencia_general ? 'bg-success' : 'bg-danger'} mb-1">
+                        ${data.asistencia_general ? 'REGISTRADO' : 'NO REGISTRADO'}
+                    </div>
+                    <div class="small text-muted">Asistencia General</div>
+                </div>
+            </div>
+    `;
+    
+    // Agregar ponencias dinámicamente (excluyendo 'dni', 'nombre', 'asistencia_general')
+    const sessionFields = Object.keys(data).filter(key => 
+        !['dni', 'nombre', 'asistencia_general'].includes(key)
+    );
+    
+    // Determinar clases de columna basado en número de ponencias
+    const totalColumns = sessionFields.length + 1; // +1 por asistencia general
+    const colClass = totalColumns <= 4 ? 'col-6 col-md-3' : 
+                     totalColumns <= 6 ? 'col-6 col-md-2' : 
+                     'col-4 col-md-2';
+    
+    // Actualizar clase de columna de asistencia general
+    html = html.replace('col-6 col-md-3', colClass);
+    
+    sessionFields.forEach(sessionKey => {
+        const sessionName = getSessionNameFromKey(sessionKey);
+        html += `
+            <div class="${colClass}">
+                <div class="text-center">
+                    <div class="badge ${data[sessionKey] ? 'bg-success' : 'bg-secondary'} mb-1">
+                        ${data[sessionKey] ? 'SÍ' : 'NO'}
+                    </div>
+                    <div class="small text-muted text-truncate" title="${sessionName}">${sessionName}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `</div>`;
+    
+    info.innerHTML = html;
+    card.style.display = 'block';
+}
+
+function getSessionNameFromKey(sessionKey) {
+    // Buscar el nombre real de la sesión en la lista de sesiones
+    const session = sessionsList.find(s => s.id === sessionKey);
+    if (session) {
+        return session.name;
+    }
+    
+    // Fallback: convertir el key a nombre legible
+    if (sessionKey.startsWith('ponencia_')) {
+        return sessionKey.replace('ponencia_', 'Ponencia ').replace('_', ' ');
+    }
+    if (sessionKey.startsWith('session_')) {
+        return sessionKey.replace('session_', 'Sesión ').replace(/_/g, ' ');
+    }
+    return sessionKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function displaySessionsSelection(attendeeData) {
+    const card = document.getElementById('sessionsCard');
+    const list = document.getElementById('sessionsList');
+    
+    if (sessionsList.length === 0) {
+        list.innerHTML = '<div class="col-12 text-center text-muted py-4">No hay ponencias configuradas</div>';
+        card.style.display = 'block';
+        return;
+    }
+    
+    // Determinar clases de columna basado en número de ponencias
+    const colClass = sessionsList.length <= 2 ? 'col-12 col-md-6' : 
+                     sessionsList.length <= 3 ? 'col-12 col-md-4' : 
+                     'col-12 col-lg-4 col-xl-3';
+    
+    list.innerHTML = sessionsList.map(session => {
+        const sessionId = session.id;
+        const sessionName = session.name;
+        const isRegistered = attendeeData[sessionId] || false;
+        const capacity = sessionsCapacity[sessionId] || { available: 0, total: 0, name: sessionName };
+        const hasCapacity = capacity.available > 0;
+        const canRegister = !isRegistered && hasCapacity;
+        
+        const percentage = capacity.total > 0 ? (capacity.available / capacity.total) * 100 : 0;
+        
+        return `
+            <div class="${colClass} mb-3">
+                <div class="card h-100 ${isRegistered ? 'border-success' : (canRegister ? 'border-primary' : 'border-danger')}">
+                    <div class="card-body text-center">
+                        <h6 class="card-title text-truncate" title="${sessionName}">${sessionName}</h6>
+                        <div class="mb-2">
+                            <div class="badge ${isRegistered ? 'bg-success' : 'bg-secondary'} mb-2">
+                                ${isRegistered ? 'REGISTRADO' : 'NO REGISTRADO'}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">
+                                Cupos: ${capacity.available}/${capacity.total}
+                            </small>
+                            <div class="progress mt-1" style="height: 4px;">
+                                <div class="progress-bar ${getProgressBarColor(percentage)}" 
+                                     style="width: ${percentage}%">
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn ${canRegister ? 'btn-primary' : (isRegistered ? 'btn-success' : 'btn-secondary')} btn-sm w-100"
+                                ${canRegister ? `onclick="confirmRegistration('${sessionId}', '${sessionName}')"` : 'disabled'}>
+                            ${isRegistered ? 
+                                '<i class="fas fa-check me-1"></i>Ya Registrado' : 
+                                (hasCapacity ? 
+                                    '<i class="fas fa-plus me-1"></i>Registrar' : 
+                                    '<i class="fas fa-times me-1"></i>Sin Cupos'
+                                )
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    card.style.display = 'block';
+}
+
+function confirmRegistration(sessionId, sessionName) {
+    selectedSession = sessionId;
+    const modal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+    const body = document.getElementById('confirmationBody');
+    
+    body.innerHTML = `
+        <div class="text-center">
+            <i class="fas fa-question-circle fa-3x text-warning mb-3"></i>
+            <h5>¿Confirmar registro?</h5>
+            <p>¿Estás seguro de registrar a <strong>${currentAttendee.nombre}</strong> en <strong>${sessionName}</strong>?</p>
+            <div class="alert alert-info">
+                <small>
+                    <i class="fas fa-info-circle me-1"></i>
+                    Este registro reducirá los cupos disponibles para esta ponencia.
+                </small>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('confirmRegisterBtn').onclick = () => registerSessionAttendance(sessionId, sessionName);
+    
+    modal.show();
+}
+
+async function registerSessionAttendance(sessionId, sessionName) {
+    showLoading(true);
+    
+    try {
+        const response = await fetch('/api/v1/sessions/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                dni: currentAttendee.dni,
+                session_id: sessionId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('Éxito', result.message, 'success');
+            
+            // Cerrar modal de confirmación
+            bootstrap.Modal.getInstance(document.getElementById('confirmationModal')).hide();
+            
+            // Actualizar información del participante
+            currentAttendee[sessionId] = true;
+            displayAttendeeInfo(currentAttendee);
+            displaySessionsSelection(currentAttendee);
+            
+            // Actualizar capacidad
+            await loadCapacityInfo();
+            
+            // Vibrar si está disponible
+            if (navigator.vibrate) {
+                navigator.vibrate([200, 100, 200]);
+            }
+            
+        } else {
+            showToast('Error', result.message || 'Error al registrar en ponencia', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error', 'Error al registrar en ponencia', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function loadCapacityInfo() {
+    try {
+        const response = await fetch('/api/v1/sessions/capacity');
+        const result = await response.json();
+        
+        if (result.success) {
+            sessionsCapacity = result.data;
+            displayCapacityOverview(result.data);
+            
+            // Actualizar selección de sesiones si hay un participante seleccionado
+            if (currentAttendee) {
+                displaySessionsSelection(currentAttendee);
+            }
+        } else {
+            console.error('Error loading capacity:', result.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+function displayCapacityOverview(data) {
+    const container = document.getElementById('capacityOverview');
+    
+    const sessions = Object.keys(data);
+    if (sessions.length === 0) {
+        container.innerHTML = '<div class="col-12 text-center text-muted py-3">No hay ponencias configuradas</div>';
+        return;
+    }
+    
+    // Determinar clases de columna basado en número de ponencias
+    const colClass = sessions.length <= 2 ? 'col-12 col-md-6' : 
+                     sessions.length <= 3 ? 'col-12 col-md-4' : 
+                     sessions.length <= 4 ? 'col-12 col-md-6 col-lg-3' : 
+                     'col-12 col-md-4 col-lg-2';
+    
+    container.innerHTML = sessions.map(sessionId => {
+        const sessionData = data[sessionId];
+        const sessionName = sessionData.name || getSessionNameFromKey(sessionId);
+        const percentage = sessionData.total > 0 ? Math.round((sessionData.available / sessionData.total) * 100) : 0;
+        const used = sessionData.total - sessionData.available;
+        
+        return `
+            <div class="${colClass} mb-3">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <h6 class="card-title text-truncate" title="${sessionName}">${sessionName}</h6>
+                        <div class="display-6 mb-2 ${getTextColor(percentage)}">${sessionData.available}</div>
+                        <div class="text-muted small mb-2">cupos disponibles</div>
+                        <div class="progress mb-2" style="height: 8px;">
+                            <div class="progress-bar ${getProgressBarColor(percentage)}" 
+                                 style="width: ${percentage}%">
+                            </div>
+                        </div>
+                        <small class="text-muted">
+                            ${used} registrados / ${sessionData.total} total
+                        </small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function hideAttendeeCard() {
+    document.getElementById('attendeeCard').style.display = 'none';
+    currentAttendee = null;
+}
+
+function hideSessionsCard() {
+    document.getElementById('sessionsCard').style.display = 'none';
+}
+
+function clearForm() {
+    document.getElementById('dni').value = '';
+    hideAttendeeCard();
+    hideSessionsCard();
+    document.getElementById('dni').focus();
+}
+
+function getProgressBarColor(percentage) {
+    if (percentage > 60) return 'bg-success';
+    if (percentage > 30) return 'bg-warning';
+    return 'bg-danger';
+}
+
+function getTextColor(percentage) {
+    if (percentage > 60) return 'text-success';
+    if (percentage > 30) return 'text-warning';
+    return 'text-danger';
+}
+
+// Scanner functions (same as in register.html)
+function startScanner() {
+    const modal = new bootstrap.Modal(document.getElementById('scannerModal'));
+    modal.show();
+    
+    document.getElementById('scannerModal').addEventListener('shown.bs.modal', function() {
+        initializeScanner();
+    });
+    
+    document.getElementById('scannerModal').addEventListener('hidden.bs.modal', function() {
+        stopScanner();
+    });
+}
+
+function initializeScanner() {
+    Quagga.init({
+        inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: document.querySelector('#scanner')
+        },
+        decoder: {
+            readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader"]
+        }
+    }, function(err) {
+        if (err) {
+            console.log(err);
+            showToast('Error', 'No se pudo inicializar el escáner', 'error');
+            return;
+        }
+        Quagga.start();
+    });
+    
+    Quagga.onDetected(function(data) {
+        const code = data.codeResult.code;
+        const dni = extractDNIFromCode(code);
+        if (dni) {
+            document.getElementById('dni').value = dni;
+            bootstrap.Modal.getInstance(document.getElementById('scannerModal')).hide();
+            searchAttendee();
+        }
+    });
+}
+
+function stopScanner() {
+    Quagga.stop();
+}
+
+function extractDNIFromCode(code) {
+    const numbers = code.replace(/\D/g, '');
+    if (numbers.length >= 8) {
+        return numbers.substring(0, 8);
+    }
+    return null;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Inicio - Sistema de Registro{% endblock %}
+
+{% block content %}
+<div class="hero-section text-center mb-5">
+    <div class="hero-icon mb-3">
+        <i class="fas fa-qrcode display-1 text-primary"></i>
+    </div>
+    <h1 class="display-4 fw-bold mb-3">Sistema de Registro</h1>
+    <p class="lead mb-4">Gestiona el registro de asistencia de forma rápida y eficiente</p>
+</div>
+
+<div class="row g-4">
+    <!-- Registro General Card -->
+    <div class="col-12 col-md-6">
+        <div class="card h-100 shadow-sm hover-card">
+            <div class="card-body text-center">
+                <div class="card-icon mb-3">
+                    <i class="fas fa-user-plus fa-3x text-success"></i>
+                </div>
+                <h5 class="card-title">Registro General</h5>
+                <p class="card-text">Registra la asistencia general de los participantes escaneando el código de barras del DNI.</p>
+                <a href="{{ url_for('register_page') }}" class="btn btn-success btn-lg w-100">
+                    <i class="fas fa-qrcode me-2"></i>
+                    Iniciar Registro
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ponencias Card -->
+    <div class="col-12 col-md-6">
+        <div class="card h-100 shadow-sm hover-card">
+            <div class="card-body text-center">
+                <div class="card-icon mb-3">
+                    <i class="fas fa-calendar-alt fa-3x text-info"></i>
+                </div>
+                <h5 class="card-title">Ponencias</h5>
+                <p class="card-text">Gestiona el acceso a las ponencias con cupos limitados y validación automática.</p>
+                <a href="{{ url_for('sessions_page') }}" class="btn btn-info btn-lg w-100">
+                    <i class="fas fa-calendar me-2"></i>
+                    Ver Ponencias
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exportar Datos Card -->
+    <div class="col-12">
+        <div class="card shadow-sm hover-card">
+            <div class="card-body text-center">
+                <div class="card-icon mb-3">
+                    <i class="fas fa-download fa-3x text-warning"></i>
+                </div>
+                <h5 class="card-title">Exportar Datos</h5>
+                <p class="card-text">Descarga un reporte completo con todos los datos de asistencia registrados.</p>
+                <a href="{{ url_for('export_page') }}" class="btn btn-warning btn-lg">
+                    <i class="fas fa-file-export me-2"></i>
+                    Exportar Datos
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Cards -->
+<div class="row g-3 mt-4">
+    <div class="col-12">
+        <h4 class="text-center mb-3">Estado del Sistema</h4>
+    </div>
+    
+    <!-- Capacidad Ponencias -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Capacidad de Ponencias
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="capacityInfo" class="row g-2">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadCapacityInfo();
+    
+    // Actualizar cada 30 segundos
+    setInterval(loadCapacityInfo, 30000);
+});
+
+async function loadCapacityInfo() {
+    try {
+        const response = await fetch('/api/v1/sessions/capacity');
+        const result = await response.json();
+        
+        if (result.success) {
+            displayCapacityInfo(result.data);
+        } else {
+            console.error('Error loading capacity:', result.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+function displayCapacityInfo(data) {
+    const container = document.getElementById('capacityInfo');
+    container.innerHTML = '';
+    
+    const sessions = Object.keys(data);
+    if (sessions.length === 0) {
+        container.innerHTML = '<div class="col-12 text-center text-muted">No hay ponencias configuradas</div>';
+        return;
+    }
+    
+    // Determinar el número de columnas basado en la cantidad de ponencias
+    const colClass = sessions.length <= 2 ? 'col-12 col-md-6' : 
+                     sessions.length <= 3 ? 'col-12 col-md-4' : 
+                     sessions.length <= 4 ? 'col-12 col-md-6 col-lg-3' : 
+                     'col-12 col-md-4 col-lg-2';
+    
+    sessions.forEach((sessionId) => {
+        const sessionData = data[sessionId];
+        const percentage = Math.round((sessionData.available / sessionData.total) * 100);
+        const sessionName = sessionData.name || sessionId;
+        
+        const col = document.createElement('div');
+        col.className = colClass;
+        
+        col.innerHTML = `
+            <div class="text-center">
+                <h6 class="text-truncate" title="${sessionName}">${sessionName}</h6>
+                <div class="progress mb-2" style="height: 8px;">
+                    <div class="progress-bar ${getProgressBarColor(percentage)}" 
+                         role="progressbar" 
+                         style="width: ${percentage}%">
+                    </div>
+                </div>
+                <small class="text-muted">
+                    ${sessionData.available}/${sessionData.total} cupos
+                </small>
+            </div>
+        `;
+        
+        container.appendChild(col);
+    });
+}
+
+function getProgressBarColor(percentage) {
+    if (percentage > 60) return 'bg-success';
+    if (percentage > 30) return 'bg-warning';
+    return 'bg-danger';
+}
+</script>
+{% endblock %}

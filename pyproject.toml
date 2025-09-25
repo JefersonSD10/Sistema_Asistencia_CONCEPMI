@@ -1,0 +1,26 @@
+[project]
+name = "registro-asistencia"
+version = "0.1.0"
+description = "Sistema de registro de asistencia con escaner de códigos de barras"
+requires-python = ">=3.12"
+dependencies = [
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "gunicorn>=21.2.0"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.0.0",
+    "isort>=5.12.0"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["registro_asistencia"]
