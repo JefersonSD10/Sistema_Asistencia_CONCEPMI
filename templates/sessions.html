@@ -112,7 +112,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div id="scanner" style="width: 100%; height: 400px;"></div>
+                <video id="scanner" style="width: 100%; height: 400px;" autoplay muted playsinline></video>
                 <div class="text-center mt-3">
                     <p class="text-muted">Coloca el código de barras del DNI frente a la cámara</p>
                 </div>
@@ -155,7 +155,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 <script>
 let currentAttendee = null;
 let sessionsCapacity = {};
@@ -167,8 +167,37 @@ document.addEventListener('DOMContentLoaded', function() {
     loadCapacityInfo();
     document.getElementById('dni').focus();
     
-    // Auto-refresh capacity every 30 seconds
-    setInterval(loadCapacityInfo, 30000);
+    // Auto-refresh capacity every 30 seconds only if page is visible
+    let capacityInterval = null;
+    
+    function startCapacityPolling() {
+        if (capacityInterval) return; // Already running
+        
+        capacityInterval = setInterval(() => {
+            if (!document.hidden) { // Only refresh if page is visible
+                loadCapacityInfo();
+            }
+        }, 30000);
+    }
+    
+    function stopCapacityPolling() {
+        if (capacityInterval) {
+            clearInterval(capacityInterval);
+            capacityInterval = null;
+        }
+    }
+    
+    // Start polling when page becomes visible, stop when hidden
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopCapacityPolling();
+        } else {
+            startCapacityPolling();
+        }
+    });
+    
+    // Start initial polling
+    startCapacityPolling();
     
     // Enter key handler
     document.getElementById('dni').addEventListener('keypress', function(e) {
@@ -177,20 +206,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Format DNI input
-    document.getElementById('dni').addEventListener('input', function(e) {
+    // Format DNI input with debouncing
+    const debouncedFormatDNI = RegistroApp.debounce(function(e) {
         let value = e.target.value.replace(/\D/g, '');
         if (value.length > 8) {
             value = value.substring(0, 8);
         }
         e.target.value = value;
-    });
+    }, 300);
+    
+    document.getElementById('dni').addEventListener('input', debouncedFormatDNI);
 });
 
 async function searchAttendee() {
     const dni = document.getElementById('dni').value.trim();
     
-    if (!dni || dni.length !== 8) {
+    if (!RegistroApp.validateDNI(dni)) {
         showToast('Error', 'Ingresa un DNI válido de 8 dígitos', 'error');
         return;
     }
@@ -199,6 +230,19 @@ async function searchAttendee() {
     
     try {
         const response = await fetch(`/api/v1/attendees/search/${dni}`);
+        
+        if (!response.ok) {
+            if (response.status === 500) {
+                showToast('Error del Servidor', 'Hubo un error con el servidor. Inténtalo más tarde.', 'error');
+            } else {
+                showToast('Error', `Error ${response.status}: ${response.statusText}`, 'error');
+            }
+            hideAttendeeCard();
+            hideSessionsCard();
+            showLoading(false);
+            return;
+        }
+        
         const result = await response.json();
         
         if (result.success && result.data) {
@@ -230,6 +274,17 @@ async function searchAttendee() {
 async function loadSessionsList() {
     try {
         const response = await fetch('/api/v1/sessions');
+        
+        if (!response.ok) {
+            if (response.status === 500) {
+                console.error('Error del servidor al cargar sesiones');
+            } else {
+                console.error(`Error ${response.status} al cargar sesiones`);
+            }
+            sessionsList = [];
+            return;
+        }
+        
         const result = await response.json();
         
         if (result.success) {
@@ -269,7 +324,8 @@ function displayAttendeeInfo(data) {
     
     // Agregar ponencias dinámicamente (excluyendo 'dni', 'nombre', 'asistencia_general')
     const sessionFields = Object.keys(data).filter(key => 
-        !['dni', 'nombre', 'asistencia_general'].includes(key)
+        !['dni', 'nombre', 'asistencia_general'].includes(key) &&
+        sessionsList.some(session => session.id === key)
     );
     
     // Determinar clases de columna basado en número de ponencias
@@ -295,7 +351,7 @@ function displayAttendeeInfo(data) {
         `;
     });
     
-    html += `</div>`;
+    html += '</div>';
     
     info.innerHTML = html;
     card.style.display = 'block';
@@ -339,7 +395,7 @@ function displaySessionsSelection(attendeeData) {
         const isRegistered = attendeeData[sessionId] || false;
         const capacity = sessionsCapacity[sessionId] || { available: 0, total: 0, name: sessionName };
         const hasCapacity = capacity.available > 0;
-        const canRegister = !isRegistered && hasCapacity;
+        const canRegister = !isRegistered && hasCapacity && attendeeData.asistencia_general;
         
         const percentage = capacity.total > 0 ? (capacity.available / capacity.total) * 100 : 0;
         
@@ -364,7 +420,7 @@ function displaySessionsSelection(attendeeData) {
                             </div>
                         </div>
                         <button class="btn ${canRegister ? 'btn-primary' : (isRegistered ? 'btn-success' : 'btn-secondary')} btn-sm w-100"
-                                ${canRegister ? `onclick="confirmRegistration('${sessionId}', '${sessionName}')"` : 'disabled'}>
+                                ${canRegister ? onclick="confirmRegistration('${sessionId}', '${sessionName}')" : 'disabled'}>
                             ${isRegistered ? 
                                 '<i class="fas fa-check me-1"></i>Ya Registrado' : 
                                 (hasCapacity ? 
@@ -409,6 +465,11 @@ function confirmRegistration(sessionId, sessionName) {
 async function registerSessionAttendance(sessionId, sessionName) {
     showLoading(true);
     
+    // Show specific loading message
+    const loadingModal = document.getElementById('loadingModal');
+    const loadingText = loadingModal.querySelector('p');
+    loadingText.textContent = `Registrando en ${sessionName}...`;
+    
     try {
         const response = await fetch('/api/v1/sessions/register', {
             method: 'POST',
@@ -421,6 +482,20 @@ async function registerSessionAttendance(sessionId, sessionName) {
             })
         });
         
+        if (!response.ok) {
+            if (response.status === 500) {
+                showToast('Error del Servidor', 'Hubo un error con el servidor. Inténtalo más tarde.', 'error');
+            } else {
+                showToast('Error', `Error ${response.status}: ${response.statusText}`, 'error');
+            }
+            // Reset loading message
+            const loadingModal = document.getElementById('loadingModal');
+            const loadingText = loadingModal.querySelector('p');
+            loadingText.textContent = 'Procesando...';
+            showLoading(false);
+            return;
+        }
+        
         const result = await response.json();
         
         if (result.success) {
@@ -429,12 +504,12 @@ async function registerSessionAttendance(sessionId, sessionName) {
             // Cerrar modal de confirmación
             bootstrap.Modal.getInstance(document.getElementById('confirmationModal')).hide();
             
-            // Actualizar información del participante
+            // Actualizar información del participante solo después de confirmar éxito
             currentAttendee[sessionId] = true;
             displayAttendeeInfo(currentAttendee);
             displaySessionsSelection(currentAttendee);
             
-            // Actualizar capacidad
+            // Actualizar capacidad después de actualizar la UI
             await loadCapacityInfo();
             
             // Vibrar si está disponible
@@ -449,6 +524,10 @@ async function registerSessionAttendance(sessionId, sessionName) {
         console.error('Error:', error);
         showToast('Error', 'Error al registrar en ponencia', 'error');
     } finally {
+        // Reset loading message
+        const loadingModal = document.getElementById('loadingModal');
+        const loadingText = loadingModal.querySelector('p');
+        loadingText.textContent = 'Procesando...';
         showLoading(false);
     }
 }
@@ -456,6 +535,16 @@ async function registerSessionAttendance(sessionId, sessionName) {
 async function loadCapacityInfo() {
     try {
         const response = await fetch('/api/v1/sessions/capacity');
+        
+        if (!response.ok) {
+            if (response.status === 500) {
+                console.error('Error del servidor al cargar capacidad');
+            } else {
+                console.error(`Error ${response.status} al cargar capacidad`);
+            }
+            return;
+        }
+        
         const result = await response.json();
         
         if (result.success) {
@@ -559,46 +648,216 @@ function startScanner() {
     });
 }
 
+let codeReader = null;
+let isScanning = false;
+
 function initializeScanner() {
-    Quagga.init({
-        inputStream: {
-            name: "Live",
-            type: "LiveStream",
-            target: document.querySelector('#scanner')
-        },
-        decoder: {
-            readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader"]
-        }
-    }, function(err) {
-        if (err) {
-            console.log(err);
-            showToast('Error', 'No se pudo inicializar el escáner', 'error');
-            return;
-        }
-        Quagga.start();
-    });
+    console.log('Inicializando escáner ZXing...');
     
-    Quagga.onDetected(function(data) {
-        const code = data.codeResult.code;
-        const dni = extractDNIFromCode(code);
-        if (dni) {
-            document.getElementById('dni').value = dni;
+    // Crear instancia del lector
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    
+    // Configurar tipos de códigos a detectar
+    const hints = new Map();
+    const formats = [
+        ZXing.BarcodeFormat.QR_CODE,
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,
+        ZXing.BarcodeFormat.CODABAR
+    ];
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    
+    codeReader.hints = hints;
+    
+    // Listar dispositivos de video disponibles
+    codeReader.listVideoInputDevices()
+        .then((videoInputDevices) => {
+            console.log('Dispositivos de video encontrados:', videoInputDevices.length);
+            
+            // Seleccionar cámara trasera si está disponible
+            let selectedDeviceId = undefined;
+            if (videoInputDevices.length > 0) {
+                // Buscar cámara trasera
+                const backCamera = videoInputDevices.find(device => 
+                    device.label.toLowerCase().includes('back') || 
+                    device.label.toLowerCase().includes('rear') ||
+                    device.label.toLowerCase().includes('environment')
+                );
+                selectedDeviceId = backCamera ? backCamera.deviceId : videoInputDevices[0].deviceId;
+                console.log('Cámara seleccionada:', selectedDeviceId);
+            }
+            
+            // Iniciar escaneado
+            startScanning(selectedDeviceId);
+        })
+        .catch((err) => {
+            console.error('Error listando dispositivos:', err);
+            showToast('Error', 'No se pudo acceder a la cámara', 'error');
+        });
+}
+
+function startScanning(deviceId) {
+    console.log('Iniciando escaneado con ZXing...');
+    isScanning = true;
+    
+    const videoElement = document.querySelector('#scanner');
+    
+    codeReader.decodeFromVideoDevice(deviceId, videoElement, (result, err) => {
+        if (result) {
+            const code = result.getText();
+            const format = result.getBarcodeFormat();
+            
+            console.log('✅ CÓDIGO DETECTADO:', code, 'formato:', ZXing.BarcodeFormat[format]);
+            
+            // ENVIAR AL BACKEND PARA DEBUGGING
+            sendCodeToBackend(code, ZXing.BarcodeFormat[format], 'sessions-page');
+            
+            // SIEMPRE cerrar modal y mostrar el código detectado
             bootstrap.Modal.getInstance(document.getElementById('scannerModal')).hide();
-            searchAttendee();
+            
+            // Vibrar si está disponible
+            if (navigator.vibrate) {
+                navigator.vibrate(200);
+            }
+            
+            // Intentar extraer DNI
+            const dni = extractDNIFromCode(code);
+            console.log('DNI extraído:', dni);
+            
+            if (dni) {
+                // Es un DNI válido - llenar campo y buscar
+                document.getElementById('dni').value = dni;
+                showToast('Éxito', 'DNI detectado: ' + dni, 'success');
+                searchAttendee();
+            } else {
+                // NO es un DNI - solo mostrar el código
+                showToast('Código detectado', 'Contenido: ' + code + ' (No es un DNI válido)', 'info');
+                console.log('El código no contiene un DNI válido, no se realizará búsqueda');
+            }
+            
+        } else if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.error('Error de escaneado:', err);
         }
+        // NotFoundException es normal, significa que no encontró código en este frame
+    })
+    .then(() => {
+        console.log('Escáner ZXing iniciado exitosamente');
+    })
+    .catch((err) => {
+        console.error('Error iniciando escáner:', err);
+        showToast('Error', 'No se pudo inicializar el escáner: ' + err.message, 'error');
     });
 }
 
 function stopScanner() {
-    Quagga.stop();
+    console.log('Deteniendo escáner ZXing...');
+    if (codeReader) {
+        codeReader.reset();
+    }
+    isScanning = false;
 }
 
 function extractDNIFromCode(code) {
+    console.log('Procesando código para extraer DNI:', code);
+    
+    // Esta función debe adaptarse según el formato del código de barras del DNI
+    // Intentamos diferentes métodos de extracción
+    
+    // Método 1: Extraer solo números (primeros 8 dígitos)
     const numbers = code.replace(/\D/g, '');
+    console.log('Números extraídos:', numbers);
+    
     if (numbers.length >= 8) {
-        return numbers.substring(0, 8);
+        const dni = numbers.substring(0, 8);
+        console.log('DNI método 1 (primeros 8 números):', dni);
+        return dni;
     }
+    
+    // Método 2: Si el código tiene exactamente 8 números, usarlo completo
+    if (numbers.length === 8) {
+        console.log('DNI método 2 (8 números exactos):', numbers);
+        return numbers;
+    }
+    
+    // Método 3: Buscar patrón específico (ej: @12345678@)
+    const match = code.match(/(\d{8})/);
+    if (match) {
+        console.log('DNI método 3 (patrón regex):', match[1]);
+        return match[1];
+    }
+    
+    console.log('No se pudo extraer DNI válido del código');
     return null;
 }
+
+async function sendCodeToBackend(code, format, source) {
+    try {
+        console.log('Enviando código al backend:', code);
+        
+        const response = await fetch('/api/v1/debug/scanned-code', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                code: code,
+                format: format,
+                source: source
+            })
+        });
+        
+        const result = await response.json();
+        console.log('Respuesta del backend:', result);
+        
+        if (result.success) {
+            console.log('✅ Código enviado al backend exitosamente');
+        } else {
+            console.log('❌ Error en backend:', result.message);
+        }
+        
+    } catch (error) {
+        console.error('Error enviando código al backend:', error);
+    }
+}
+
+async function sendBoxesToBackend(boxes, source) {
+    try {
+        console.log('Enviando boxes al backend:', boxes);
+        
+        const response = await fetch('/api/v1/debug/scanned-code', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                code: '[BOXES_DETECTED]',
+                format: 'boxes-only',
+                source: source,
+                boxes_info: {
+                    count: boxes.length,
+                    boxes: boxes
+                }
+            })
+        });
+        
+        const result = await response.json();
+        console.log('Respuesta del backend (boxes):', result);
+        
+        if (result.success) {
+            console.log('✅ Boxes enviados al backend exitosamente');
+        } else {
+            console.log('❌ Error en backend (boxes):', result.message);
+        }
+        
+    } catch (error) {
+        console.error('Error enviando boxes al backend:', error);
+    }
+}
+
 </script>
 {% endblock %}

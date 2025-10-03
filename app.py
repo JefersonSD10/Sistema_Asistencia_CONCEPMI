@@ -26,7 +26,10 @@ class AppScriptAPI:
         """Buscar asistente por DNI"""
         try:
             response = requests.get(f"{self.base_url}?action=getAttendeeByDNI&dni={dni}")
-            return response.json()
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": f"HTTP {response.status_code}: {response.text}"}
         except Exception as e:
             return {"error": str(e)}
     
@@ -38,7 +41,10 @@ class AppScriptAPI:
                 "dni": dni,
                 "timestamp": datetime.now().isoformat()
             })
-            return response.json()
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": f"HTTP {response.status_code}: {response.text}"}
         except Exception as e:
             return {"error": str(e)}
     
@@ -46,7 +52,10 @@ class AppScriptAPI:
         """Obtener lista de ponencias disponibles"""
         try:
             response = requests.get(f"{self.base_url}?action=getSessionsList")
-            return response.json()
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": f"HTTP {response.status_code}: {response.text}"}
         except Exception as e:
             return {"error": str(e)}
     
@@ -54,7 +63,10 @@ class AppScriptAPI:
         """Obtener capacidad de todas las ponencias"""
         try:
             response = requests.get(f"{self.base_url}?action=getSessionsCapacity")
-            return response.json()
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": f"HTTP {response.status_code}: {response.text}"}
         except Exception as e:
             return {"error": str(e)}
     
@@ -67,7 +79,10 @@ class AppScriptAPI:
                 "session_id": session_id,
                 "timestamp": datetime.now().isoformat()
             })
-            return response.json()
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": f"HTTP {response.status_code}: {response.text}"}
         except Exception as e:
             return {"error": str(e)}
     
@@ -75,7 +90,10 @@ class AppScriptAPI:
         """Exportar datos de asistentes"""
         try:
             response = requests.get(f"{self.base_url}?action=exportAttendeesData")
-            return response.json()
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": f"HTTP {response.status_code}: {response.text}"}
         except Exception as e:
             return {"error": str(e)}
 
@@ -387,6 +405,78 @@ def export_attendees():
         return jsonify({
             "success": False,
             "message": "Error interno del servidor",
+            "error": str(e)
+        }), 500
+
+@app.route('/api/v1/debug/scanned-code', methods=['POST'])
+def debug_scanned_code():
+    """
+    Endpoint para debugging - recibe cualquier código escaneado
+    
+    Input: {
+        "code": string,
+        "format": string,
+        "source": string
+    }
+    Output: {
+        "success": boolean,
+        "message": string
+    }
+    """
+    try:
+        data = request.get_json()
+        code = data.get('code', '')
+        format_type = data.get('format', 'unknown')
+        source = data.get('source', 'unknown')
+        
+        # IMPRIMIR EN CONSOLA DEL SERVIDOR
+        print("=" * 60)
+        print("🔍 CÓDIGO ESCANEADO DETECTADO:")
+        print(f"📱 Fuente: {source}")
+        print(f"📋 Código: {code}")
+        print(f"🔖 Formato: {format_type}")
+        print(f"📏 Longitud: {len(code)} caracteres")
+        
+        # Si es detección de boxes solamente
+        if code == '[BOXES_DETECTED]':
+            boxes_info = data.get('boxes_info', {})
+            print(f"📦 Detección de boxes: {boxes_info.get('count', 0)} boxes encontrados")
+            print("🔍 QuaggaJS detectó formas que parecen códigos pero no logró decodificarlos")
+            
+            # Imprimir información de los boxes
+            if 'boxes' in boxes_info:
+                for i, box in enumerate(boxes_info['boxes'][:3]):  # Solo primeros 3 boxes
+                    print(f"   📦 Box {i+1}: {box}")
+        else:
+            # Intentar extraer números
+            numbers = ''.join(filter(str.isdigit, code))
+            print(f"🔢 Solo números: {numbers} (longitud: {len(numbers)})")
+            
+            # Verificar si podría ser DNI
+            if len(numbers) >= 8:
+                possible_dni = numbers[:8]
+                print(f"✅ Posible DNI: {possible_dni}")
+            else:
+                print("❌ No contiene suficientes números para ser DNI")
+        
+        print("=" * 60)
+        
+        return jsonify({
+            "success": True,
+            "message": "Código recibido y procesado en servidor",
+            "debug_info": {
+                "code": code,
+                "format": format_type,
+                "numbers_extracted": numbers,
+                "possible_dni": numbers[:8] if len(numbers) >= 8 else None
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ Error procesando código escaneado: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": "Error procesando código",
             "error": str(e)
         }), 500
 

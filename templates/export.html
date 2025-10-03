@@ -152,8 +152,37 @@ document.addEventListener('DOMContentLoaded', function() {
     loadStatistics();
     displayExportHistory();
     
-    // Auto-refresh statistics every 30 seconds
-    setInterval(loadStatistics, 30000);
+    // Auto-refresh statistics every 30 seconds only if page is visible
+    let statisticsInterval = null;
+    
+    function startStatisticsPolling() {
+        if (statisticsInterval) return; // Already running
+        
+        statisticsInterval = setInterval(() => {
+            if (!document.hidden) { // Only refresh if page is visible
+                loadStatistics();
+            }
+        }, 30000);
+    }
+    
+    function stopStatisticsPolling() {
+        if (statisticsInterval) {
+            clearInterval(statisticsInterval);
+            statisticsInterval = null;
+        }
+    }
+    
+    // Start polling when page becomes visible, stop when hidden
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopStatisticsPolling();
+        } else {
+            startStatisticsPolling();
+        }
+    });
+    
+    // Start initial polling
+    startStatisticsPolling();
 });
 
 async function exportData(format) {
@@ -176,6 +205,17 @@ async function exportData(format) {
             
         } else if (format === 'json') {
             const response = await fetch('/api/v1/attendees/export');
+            
+            if (!response.ok) {
+                if (response.status === 500) {
+                    showToast('Error del Servidor', 'Hubo un error con el servidor. Inténtalo más tarde.', 'error');
+                } else {
+                    showToast('Error', `Error ${response.status}: ${response.statusText}`, 'error');
+                }
+                showLoading(false);
+                return;
+            }
+            
             const result = await response.json();
             
             if (result.success) {
@@ -208,6 +248,24 @@ async function loadStatistics() {
             fetch('/api/v1/sessions/capacity'),
             fetch('/api/v1/sessions')
         ]);
+        
+        if (!capacityResponse.ok) {
+            if (capacityResponse.status === 500) {
+                console.error('Error del servidor al cargar capacidad');
+            } else {
+                console.error(`Error ${capacityResponse.status} al cargar capacidad`);
+            }
+            return;
+        }
+        
+        if (!sessionsResponse.ok) {
+            if (sessionsResponse.status === 500) {
+                console.error('Error del servidor al cargar sesiones');
+            } else {
+                console.error(`Error ${sessionsResponse.status} al cargar sesiones`);
+            }
+            return;
+        }
         
         const capacityResult = await capacityResponse.json();
         const sessionsResult = await sessionsResponse.json();

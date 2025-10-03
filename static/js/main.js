@@ -300,10 +300,16 @@ function handleError(error, userMessage = 'Ha ocurrido un error inesperado') {
     
     if (error.name === 'NetworkError' || !navigator.onLine) {
         errorMessage = 'Error de conexión. Verifica tu conexión a internet.';
+    } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        errorMessage = 'Error de conexión. No se pudo conectar al servidor.';
     } else if (error.status === 404) {
         errorMessage = 'Recurso no encontrado.';
     } else if (error.status === 500) {
         errorMessage = 'Error del servidor. Inténtalo más tarde.';
+    } else if (error.status === 403) {
+        errorMessage = 'Acceso denegado. Verifica tus permisos.';
+    } else if (error.status === 429) {
+        errorMessage = 'Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.';
     } else if (error.message) {
         errorMessage = error.message;
     }

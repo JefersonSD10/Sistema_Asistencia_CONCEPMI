@@ -94,13 +94,52 @@
 document.addEventListener('DOMContentLoaded', function() {
     loadCapacityInfo();
     
-    // Actualizar cada 30 segundos
-    setInterval(loadCapacityInfo, 30000);
+    // Auto-refresh every 30 seconds only if page is visible
+    let capacityInterval = null;
+    
+    function startCapacityPolling() {
+        if (capacityInterval) return; // Already running
+        
+        capacityInterval = setInterval(() => {
+            if (!document.hidden) { // Only refresh if page is visible
+                loadCapacityInfo();
+            }
+        }, 30000);
+    }
+    
+    function stopCapacityPolling() {
+        if (capacityInterval) {
+            clearInterval(capacityInterval);
+            capacityInterval = null;
+        }
+    }
+    
+    // Start polling when page becomes visible, stop when hidden
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopCapacityPolling();
+        } else {
+            startCapacityPolling();
+        }
+    });
+    
+    // Start initial polling
+    startCapacityPolling();
 });
 
 async function loadCapacityInfo() {
     try {
         const response = await fetch('/api/v1/sessions/capacity');
+        
+        if (!response.ok) {
+            if (response.status === 500) {
+                console.error('Error del servidor al cargar capacidad');
+            } else {
+                console.error(`Error ${response.status} al cargar capacidad`);
+            }
+            return;
+        }
+        
         const result = await response.json();
         
         if (result.success) {
