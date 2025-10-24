@@ -10,27 +10,38 @@ import io
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(_name_)
 CORS(app)
 
 # Configuration
-APPSCRIPT_BASE_URL = os.getenv('APPSCRIPT_BASE_URL', 'https://script.google.com/macros/s/FAKE_SCRIPT_ID/exec')
+APPSCRIPT_BASE_URL = os.getenv('APPSCRIPT_BASE_URL', 'https://script.google.com/macros/s/AKfycbzRdrkrLLfbNq-dOjphGljbJoalvEbk_sM1D7XtmlKntWZ0jiVS1xfU6axM5jxEwdJs/exec')
 
 class AppScriptAPI:
     """Clase para manejar las llamadas a Google Apps Script"""
     
-    def __init__(self, base_url):
+    def _init_(self, base_url):
         self.base_url = base_url
     
     def get_attendee_by_dni(self, dni):
         """Buscar asistente por DNI"""
         try:
-            response = requests.get(f"{self.base_url}?action=getAttendeeByDNI&dni={dni}")
+            url = f"{self.base_url}?action=getAttendeeByDNI&dni={dni}"
+            print(f"[DEBUG] Buscando DNI: {dni}")
+            print(f"[DEBUG] URL completa: {url}")
+            response = requests.get(url, timeout=10)
+            print(f"[DEBUG] Status: {response.status_code}")
+            print(f"[DEBUG] Respuesta completa: {response.text}")
             if response.status_code == 200:
-                return response.json()
+                data = response.json()
+                print(f"[DEBUG] JSON parseado: {data}")
+                return data
             else:
+                print(f"[ERROR] HTTP error: {response.status_code}")
                 return {"error": f"HTTP {response.status_code}: {response.text}"}
         except Exception as e:
+            print(f"[ERROR] Exception en get_attendee_by_dni: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {"error": str(e)}
     
     def register_general_attendance(self, dni):
@@ -51,23 +62,33 @@ class AppScriptAPI:
     def get_sessions_list(self):
         """Obtener lista de ponencias disponibles"""
         try:
-            response = requests.get(f"{self.base_url}?action=getSessionsList")
+            url = f"{self.base_url}?action=getSessionsList"
+            print(f"[DEBUG] Llamando a: {url}")
+            response = requests.get(url, timeout=10)
+            print(f"[DEBUG] Status: {response.status_code}")
+            print(f"[DEBUG] Respuesta: {response.text[:500]}")
             if response.status_code == 200:
                 return response.json()
             else:
                 return {"error": f"HTTP {response.status_code}: {response.text}"}
         except Exception as e:
+            print(f"[ERROR] Exception en get_sessions_list: {str(e)}")
             return {"error": str(e)}
     
     def get_sessions_capacity(self):
         """Obtener capacidad de todas las ponencias"""
         try:
-            response = requests.get(f"{self.base_url}?action=getSessionsCapacity")
+            url = f"{self.base_url}?action=getSessionsCapacity"
+            print(f"[DEBUG] Llamando a: {url}")
+            response = requests.get(url, timeout=10)
+            print(f"[DEBUG] Status: {response.status_code}")
+            print(f"[DEBUG] Respuesta: {response.text[:500]}")
             if response.status_code == 200:
                 return response.json()
             else:
                 return {"error": f"HTTP {response.status_code}: {response.text}"}
         except Exception as e:
+            print(f"[ERROR] Exception en get_sessions_capacity: {str(e)}")
             return {"error": str(e)}
     
     def register_session_attendance(self, dni, session_id):
@@ -494,5 +515,5 @@ def internal_error(error):
         "message": "Error interno del servidor"
     }), 500
 
-if __name__ == '__main__':
+if _name_ == '_main_':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -229,13 +229,13 @@ async function searchAttendee() {
     showLoading(true);
     
     try {
-        const response = await fetch(`/api/v1/attendees/search/${dni}`);
+        const response = await fetch(/api/v1/attendees/search/${dni});
         
         if (!response.ok) {
             if (response.status === 500) {
                 showToast('Error del Servidor', 'Hubo un error con el servidor. Inténtalo más tarde.', 'error');
             } else {
-                showToast('Error', `Error ${response.status}: ${response.statusText}`, 'error');
+                showToast('Error', Error ${response.status}: ${response.statusText}, 'error');
             }
             hideAttendeeCard();
             hideSessionsCard();
@@ -279,7 +279,7 @@ async function loadSessionsList() {
             if (response.status === 500) {
                 console.error('Error del servidor al cargar sesiones');
             } else {
-                console.error(`Error ${response.status} al cargar sesiones`);
+                console.error(Error ${response.status} al cargar sesiones);
             }
             sessionsList = [];
             return;
@@ -419,8 +419,10 @@ function displaySessionsSelection(attendeeData) {
                                 </div>
                             </div>
                         </div>
-                        <button class="btn ${canRegister ? 'btn-primary' : (isRegistered ? 'btn-success' : 'btn-secondary')} btn-sm w-100"
-                                ${canRegister ? onclick="confirmRegistration('${sessionId}', '${sessionName}')" : 'disabled'}>
+                        <button class="btn ${canRegister ? 'btn-primary' : (isRegistered ? 'btn-success' : 'btn-secondary')} btn-sm w-100 session-register-btn"
+                                data-session-id="${sessionId}"
+                                data-session-name="${sessionName}"
+                                ${canRegister ? '' : 'disabled'}>
                             ${isRegistered ? 
                                 '<i class="fas fa-check me-1"></i>Ya Registrado' : 
                                 (hasCapacity ? 
@@ -436,6 +438,17 @@ function displaySessionsSelection(attendeeData) {
     }).join('');
     
     card.style.display = 'block';
+    
+    // Agregar event listeners a los botones de registrar
+    document.querySelectorAll('.session-register-btn').forEach(btn => {
+        if (!btn.disabled) {
+            btn.addEventListener('click', function() {
+                const sessionId = this.getAttribute('data-session-id');
+                const sessionName = this.getAttribute('data-session-name');
+                confirmRegistration(sessionId, sessionName);
+            });
+        }
+    });
 }
 
 function confirmRegistration(sessionId, sessionName) {
@@ -468,7 +481,7 @@ async function registerSessionAttendance(sessionId, sessionName) {
     // Show specific loading message
     const loadingModal = document.getElementById('loadingModal');
     const loadingText = loadingModal.querySelector('p');
-    loadingText.textContent = `Registrando en ${sessionName}...`;
+    loadingText.textContent = Registrando en ${sessionName}...;
     
     try {
         const response = await fetch('/api/v1/sessions/register', {
@@ -486,7 +499,7 @@ async function registerSessionAttendance(sessionId, sessionName) {
             if (response.status === 500) {
                 showToast('Error del Servidor', 'Hubo un error con el servidor. Inténtalo más tarde.', 'error');
             } else {
-                showToast('Error', `Error ${response.status}: ${response.statusText}`, 'error');
+                showToast('Error', Error ${response.status}: ${response.statusText}, 'error');
             }
             // Reset loading message
             const loadingModal = document.getElementById('loadingModal');
@@ -540,7 +553,7 @@ async function loadCapacityInfo() {
             if (response.status === 500) {
                 console.error('Error del servidor al cargar capacidad');
             } else {
-                console.error(`Error ${response.status} al cargar capacidad`);
+                console.error(Error ${response.status} al cargar capacidad);
             }
             return;
         }
