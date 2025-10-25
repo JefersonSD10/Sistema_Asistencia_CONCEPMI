@@ -10,7 +10,7 @@ import io
 # Load environment variables
 load_dotenv()
 
-app = Flask(_name_)
+app = Flask(__name__)
 CORS(app)
 
 # Configuration
@@ -19,7 +19,7 @@ APPSCRIPT_BASE_URL = os.getenv('APPSCRIPT_BASE_URL', 'https://script.google.com/
 class AppScriptAPI:
     """Clase para manejar las llamadas a Google Apps Script"""
     
-    def _init_(self, base_url):
+    def __init__(self, base_url):
         self.base_url = base_url
     
     def get_attendee_by_dni(self, dni):
@@ -458,6 +458,9 @@ def debug_scanned_code():
         print(f"🔖 Formato: {format_type}")
         print(f"📏 Longitud: {len(code)} caracteres")
         
+        # Inicializar variable numbers
+        numbers = ''
+        
         # Si es detección de boxes solamente
         if code == '[BOXES_DETECTED]':
             boxes_info = data.get('boxes_info', {})
@@ -515,5 +518,5 @@ def internal_error(error):
         "message": "Error interno del servidor"
     }), 500
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
