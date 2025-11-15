@@ -6,7 +6,7 @@ services:
     environment:
       - FLASK_ENV=development
       - FLASK_DEBUG=1
-      - APPSCRIPT_BASE_URL=https://script.google.com/macros/s/AKfycbzRdrkrLLfbNq-dOjphGljbJoalvEbk_sM1D7XtmlKntWZ0jiVS1xfU6axM5jxEwdJs/exec
+      - APPSCRIPT_BASE_URL=https://script.google.com/macros/s/AKfycbxW0qZqvpGkURaRONQwsP4kQ1APVdhAY82czr9E6gk38zY_xoauKdyg1KCGt0sdrb4d/exec
     volumes:
       - .:/app
       - /app/.venv
