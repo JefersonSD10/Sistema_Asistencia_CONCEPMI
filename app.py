@@ -12,9 +12,9 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-
-# Configuration
-APPSCRIPT_BASE_URL = os.getenv('APPSCRIPT_BASE_URL', 'https://script.google.com/macros/s/AKfycbzRdrkrLLfbNq-dOjphGljbJoalvEbk_sM1D7XtmlKntWZ0jiVS1xfU6axM5jxEwdJs/exec')
+ 
+# Configuration 
+APPSCRIPT_BASE_URL = os.getenv('APPSCRIPT_BASE_URL', 'https://script.google.com/macros/s/AKfycbxW0qZqvpGkURaRONQwsP4kQ1APVdhAY82czr9E6gk38zY_xoauKdyg1KCGt0sdrb4d/exec')
 
 class AppScriptAPI:
     """Clase para manejar las llamadas a Google Apps Script"""
@@ -218,10 +218,26 @@ def register_general_attendance():
                 "error": result['error']
             }), 500
         
+        # Determinar el mensaje según el estado
+        if result.get('already_registered_today'):
+            # Ya se registró hoy
+            if result.get('kit_entregado'):
+                message = "Ya registró asistencia hoy. Kit entregado anteriormente"
+            else:
+                message = "Ya registró asistencia hoy"
+        elif result.get('kit_entregado'):
+            # Primera vez - recibe kit
+            message = "Asistencia general registrada exitosamente. Kit entregado"
+        else:
+            # Día posterior - sin kit (ya lo recibió antes)
+            message = "Asistencia general registrada exitosamente. Kit ya entregado anteriormente"
+        
         return jsonify({
             "success": True,
-            "message": "Asistencia general registrada exitosamente",
-            "data": result
+            "message": message,
+            "data": result,
+            "kit_entregado": result.get('kit_entregado', False),
+            "already_registered_today": result.get('already_registered_today', False)
         })
     
     except Exception as e:
@@ -370,6 +386,50 @@ def register_session_attendance():
             return jsonify({
                 "success": False,
                 "message": f"No hay cupos disponibles para {session_name}"
+            })
+        elif result.get('overlap'):
+            conflict_name = result.get('conflict_name', 'otra sesión')
+            return jsonify({
+                "success": False,
+                "message": f"Esta sesión se solapa con {conflict_name}",
+                "conflict_with": result.get('conflict_with'),
+                "conflict_name": conflict_name
+            })
+        elif result.get('too_early'):
+            session_name = result.get('session_name', session_id)
+            hours = result.get('hours', 0)
+            minutes = result.get('minutes', 0)
+            time_text = ""
+            if hours > 0:
+                time_text = f"{hours} hora(s)"
+                if minutes > 0:
+                    time_text += f" y {minutes} minuto(s)"
+            else:
+                time_text = f"{minutes} minuto(s)"
+            
+            return jsonify({
+                "success": False,
+                "message": f"Demasiado pronto para {session_name}. Falta {time_text} para el inicio. Solo puede registrarse hasta 1 hora antes.",
+                "too_early": True,
+                "session_name": session_name,
+                "hours": hours,
+                "minutes": minutes
+            })
+        elif result.get('too_late'):
+            session_name = result.get('session_name', session_id)
+            minutes_late = result.get('minutes_late', 0)
+            return jsonify({
+                "success": False,
+                "message": f"Muy tarde para {session_name}. La sesión inició hace {minutes_late} minuto(s). Solo se permite registro hasta 15 minutos después del inicio.",
+                "too_late": True,
+                "session_name": session_name,
+                "minutes_late": minutes_late
+            })
+        elif result.get('session_ended'):
+            session_name = result.get('session_name', session_id)
+            return jsonify({
+                "success": False,
+                "message": f"La sesión {session_name} ya finalizó"
             })
         else:
             return jsonify({
