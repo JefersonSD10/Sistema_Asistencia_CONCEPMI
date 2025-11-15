@@ -535,16 +535,7 @@ async function registerSessionAttendance(sessionId, sessionName) {
             let errorIcon = '❌';
             let errorMessage = result.message || 'Error al registrar en ponencia';
             
-            if (result.too_early) {
-                errorIcon = '⏳';
-                showToast('Demasiado Pronto', errorIcon + ' ' + result.message, 'warning');
-            } else if (result.too_late) {
-                errorIcon = '⏰';
-                showToast('Demasiado Tarde', errorIcon + ' ' + result.message, 'error');
-            } else if (result.message && result.message.includes('ya finalizó')) {
-                errorIcon = '🕐';
-                showToast('Sesión Finalizada', errorIcon + ' ' + result.message, 'warning');
-            } else if (result.message && result.message.includes('se solapa')) {
+            if (result.message && result.message.includes('se solapa')) {
                 errorIcon = '⏰';
                 // Si hay conflicto de horario, mostrar información adicional
                 if (result.conflict_name) {

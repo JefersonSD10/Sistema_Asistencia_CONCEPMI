@@ -395,42 +395,6 @@ def register_session_attendance():
                 "conflict_with": result.get('conflict_with'),
                 "conflict_name": conflict_name
             })
-        elif result.get('too_early'):
-            session_name = result.get('session_name', session_id)
-            hours = result.get('hours', 0)
-            minutes = result.get('minutes', 0)
-            time_text = ""
-            if hours > 0:
-                time_text = f"{hours} hora(s)"
-                if minutes > 0:
-                    time_text += f" y {minutes} minuto(s)"
-            else:
-                time_text = f"{minutes} minuto(s)"
-            
-            return jsonify({
-                "success": False,
-                "message": f"Demasiado pronto para {session_name}. Falta {time_text} para el inicio. Solo puede registrarse hasta 1 hora antes.",
-                "too_early": True,
-                "session_name": session_name,
-                "hours": hours,
-                "minutes": minutes
-            })
-        elif result.get('too_late'):
-            session_name = result.get('session_name', session_id)
-            minutes_late = result.get('minutes_late', 0)
-            return jsonify({
-                "success": False,
-                "message": f"Muy tarde para {session_name}. La sesión inició hace {minutes_late} minuto(s). Solo se permite registro hasta 15 minutos después del inicio.",
-                "too_late": True,
-                "session_name": session_name,
-                "minutes_late": minutes_late
-            })
-        elif result.get('session_ended'):
-            session_name = result.get('session_name', session_id)
-            return jsonify({
-                "success": False,
-                "message": f"La sesión {session_name} ya finalizó"
-            })
         else:
             return jsonify({
                 "success": False,
