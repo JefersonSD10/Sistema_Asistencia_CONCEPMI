@@ -59,14 +59,18 @@ Este documento especifica todos los endpoints de la API del Sistema de Registro 
 ```json
 {
   "success": true,
-  "message": "Asistencia general registrada exitosamente",
+  "message": "Asistencia general registrada exitosamente. Kit entregado",
   "data": {
     "dni": "12345678",
-    "registered_at": "2025-01-20T10:30:00",
-    "status": "registered"
-  }
+    "timestamp": "2025-01-20T10:30:00",
+    "registered": true,
+    "kit_entregado": true
+  },
+  "kit_entregado": true
 }
 ```
+
+**Nota**: El campo `kit_entregado` indica si se entregó el kit de bienvenida al participante durante el registro.
 
 **Códigos de Estado**:
 - `200`: Registro exitoso
@@ -210,6 +214,18 @@ Este documento especifica todos los endpoints de la API del Sistema de Registro 
   "message": "Ya está registrado en Conferencia de Marketing Digital"
 }
 ```
+
+**Output Error - Conflicto de Horario (Nuevo)**:
+```json
+{
+  "success": false,
+  "message": "Esta sesión se solapa con Innovaciones Tecnológicas 2025",
+  "conflict_with": "ponencia_tech",
+  "conflict_name": "Innovaciones Tecnológicas 2025"
+}
+```
+
+**Nota sobre Conflictos de Horario**: El sistema valida que un participante no pueda inscribirse en dos sesiones que se realicen al mismo tiempo. Si intenta registrarse en una sesión que se solapa con otra en la que ya está inscrito, recibirá este error.
 
 **Códigos de Estado**:
 - `200`: Éxito o error controlado

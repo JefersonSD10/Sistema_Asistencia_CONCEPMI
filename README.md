@@ -1,496 +1,446 @@
-# Sistema de Registro de Asistencia
+# Sistema de Registro de Asistencia - CONCEPMI
 
-Sistema web Flask para gestionar el registro de asistencia mediante escáner de códigos de barras de DNI. Diseñado para eventos con asistencia general y ponencias con cupos limitados.
+Sistema web para registro de asistencia a eventos con escaneo de códigos de barras y gestión de ponencias.
 
-## Características
+## 🚀 Características
 
-- *Registro de Asistencia General*: Escáner de códigos de barras de DNI para registro rápido
-- *Gestión de Ponencias*: Control de cupos y validación de asistencia previa
-- *Interface Mobile-First*: Optimizado para dispositivos móviles
-- *Exportación de Datos*: Descarga de reportes en CSV y JSON
-- *Integración con Google Sheets*: Mediante Google Apps Script
-- *Docker Support*: Contenedorización completa
+-  Registro de asistencia general multi-día con control de kit único
+-  Registro en múltiples ponencias con validación de horarios
+-  Escaneo de códigos de barras DNI con cámara
+-  Validación de ventanas de tiempo para registro en ponencias
+-  Control de capacidad y prevención de solapamientos
+-  Exportación de datos de asistencia
+-  Interfaz responsive y moderna
 
-## Estructura de Datos
+## 🛠️ Tecnologías
 
-### Google Sheet Principal "Asistentes"
-- *DNI*: Documento de identidad (8 dígitos)
-- *Nombre*: Nombre completo del participante
-- *Asistencia General*: Estado del registro general (TRUE/FALSE)
-- *[session_ids]*: Columnas dinámicas para cada ponencia (TRUE/FALSE)
+- **Backend**: Python Flask 3.0
+- **Frontend**: Bootstrap 5, JavaScript ES6
+- **Almacenamiento**: Google Sheets vía Apps Script
+- **Escaneo**: ZXing Library
+- **Deployment**: Docker
 
-Ejemplo:
-
-| DNI      | Nombre      | Asistencia General | session_id_1 | ponencia_tech | workshop_liderazgo |
-|----------|-------------|-------------------|--------------|---------------|--------------------|
-| 12345678 | Juan Pérez  | TRUE              | FALSE        | TRUE          | FALSE              |
-
-
-### Google Sheet "Ponencias"  
-- *ID*: Identificador único de la ponencia (usado como nombre de columna)
-- *Nombre*: Nombre descriptivo de la ponencia
-- *Descripción*: Descripción opcional de la ponencia  
-- *Cupos Totales*: Capacidad máxima de la ponencia
-
-Ejemplo:
-
-| ID                | Nombre                           | Descripción                      | Cupos Totales |
-|-------------------|----------------------------------|----------------------------------|---------------|
-| session_id_1      | Conferencia de Marketing Digital | Estrategias modernas             | 50            |
-| ponencia_tech     | Innovaciones Tecnológicas 2025  | Tendencias y avances             | 30            |
-| workshop_liderazgo| Workshop de Liderazgo           |                                  | 60            |
-
-
-*Ventajas del Sistema Dinámico*:
-- Soporte para N ponencias (no limitado a 3)
-- Fácil agregar/quitar ponencias sin cambiar código
-- Nombres descriptivos para cada ponencia
-- Capacidades individuales por ponencia
-
-## Estructura de Google Sheets (Detallada)
-
-El sistema requiere *2 hojas* en el Google Sheets con estructuras específicas:
-
-### 📊 *Hoja 1: "Asistentes"* (Datos principales)
-
-*Columnas obligatorias*:
-| Columna | Tipo | Descripción | Ejemplo |
-|---------|------|-------------|---------|
-| DNI | Texto | Documento de identidad (8 dígitos) | 12345678 |
-| Nombre | Texto | Nombre completo del participante | Juan Pérez |
-| Asistencia General | Boolean | Registro de asistencia general | TRUE / FALSE |
-
-*Columnas dinámicas* (una por cada ponencia):
-| Columna | Tipo | Descripción | Ejemplo |
-|---------|------|-------------|---------|
-| {session_id} | Boolean | Registro en ponencia específica | TRUE / FALSE |
-
-*Ejemplo completo*:
-
-┌──────────┬─────────────┬──────────────────┬──────────────┬─────────────────┬────────────────────┐
-│ DNI      │ Nombre      │ Asistencia       │ session_id_1 │ ponencia_tech   │ workshop_liderazgo │
-│          │             │ General          │              │                 │                    │
-├──────────┼─────────────┼──────────────────┼──────────────┼─────────────────┼────────────────────┤
-│ 12345678 │ Juan Pérez  │ TRUE             │ FALSE        │ TRUE            │ FALSE              │
-│ 87654321 │ María García│ TRUE             │ TRUE         │ FALSE           │ TRUE               │
-│ 11223344 │ Carlos López│ FALSE            │ FALSE        │ FALSE           │ FALSE              │
-└──────────┴─────────────┴──────────────────┴──────────────┴─────────────────┴────────────────────┘
-
-
-### 📋 *Hoja 2: "Ponencias"* (Configuración de eventos)
-
-*Columnas obligatorias*:
-| Columna | Tipo | Descripción | Ejemplo |
-|---------|------|-------------|---------|
-| ID | Texto | Identificador único (usado como nombre de columna en hoja Asistentes) | session_id_1 |
-| Nombre | Texto | Nombre descriptivo de la ponencia | Conferencia de Marketing Digital |
-| Descripción | Texto | Descripción opcional | Estrategias modernas de marketing |
-| Cupos Totales | Número | Capacidad máxima de la ponencia | 50 |
-
-*Ejemplo completo*:
-
-┌────────────────────┬─────────────────────────────────┬────────────────────────────┬───────────────┐
-│ ID                 │ Nombre                          │ Descripción                │ Cupos Totales │
-├────────────────────┼─────────────────────────────────┼────────────────────────────┼───────────────┤
-│ session_id_1       │ Conferencia de Marketing Digital│ Estrategias modernas       │ 50            │
-│ ponencia_tech      │ Innovaciones Tecnológicas 2025 │ Tendencias y avances       │ 30            │
-│ workshop_liderazgo │ Workshop de Liderazgo          │ Desarrollo de habilidades  │ 60            │
-│ charla_ia          │ Inteligencia Artificial Práctica│ Aplicaciones reales de IA  │ 40            │
-└────────────────────┴─────────────────────────────────┴────────────────────────────┴───────────────┘
-
-
-### 🔗 *Relación entre las hojas*:
-
-1. *Los IDs de la hoja "Ponencias"* se convierten en *nombres de columnas* en la hoja "Asistentes"
-2. *Cada vez que agregas una ponencia* nueva en la hoja "Ponencias", el sistema automáticamente la detecta
-3. *Las columnas dinámicas* se crean automáticamente según las ponencias configuradas
-
-### ⚠ *Reglas importantes*:
-
-- *IDs únicos*: Cada ponencia debe tener un ID único en la hoja "Ponencias"
-- *Sin espacios en IDs*: Usar session_id_1 en lugar de session id 1
-- *Columnas exactas*: Los nombres de columnas deben coincidir exactamente
-- *Tipos de datos*: Respetar los tipos (TRUE/FALSE para booleans, números para cupos)
-- *Orden flexible*: El orden de las ponencias no importa, el sistema se adapta automáticamente
-
-## Requisitos
+## 📋 Requisitos
 
 - Python 3.12+
-- Docker y Docker Compose
-- UV (para gestión de dependencias)
+- Docker (opcional)
 - Google Apps Script configurado
+- Navegador moderno con soporte para getUserMedia (cámara)
 
-## Instalación
+## 🔧 Instalación
 
-### Con Docker (Recomendado)
+### Usando Docker (Recomendado)
 
-1. Clona el repositorio:
-bash
+```bash
+# Clonar repositorio
 git clone <repository-url>
-cd registro-asistencia
+cd Sistema_Asistencia_CONCEPMI
 
+# Configurar variable de entorno (opcional)
+# Editar docker-compose.yml con tu URL de AppScript
 
-2. Configura las variables de entorno:
-bash
-cp .env.example .env
-# Edita .env con tu APPSCRIPT_BASE_URL
-
-
-3. Construye y ejecuta con Docker Compose:
-bash
-docker-compose up --build
-
-
-4. Accede a la aplicación en http://localhost:5000
+# Iniciar contenedor
+docker compose up --build -d
+```
 
 ### Instalación Local
 
-1. Instala UV:
-bash
+```bash
+# Clonar repositorio
+git clone <repository-url>
+cd Sistema_Asistencia_CONCEPMI
+
+# Instalar dependencias con uv
 pip install uv
-
-
-2. Instala dependencias:
-bash
 uv sync
 
+# Ejecutar aplicación
+uv run flask run --host=0.0.0.0 --port=5000 --debug
+```
 
-3. Configura variables de entorno:
-bash
-export APPSCRIPT_BASE_URL="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
-export FLASK_ENV=development
+## ⚙️ Configuración
 
+### Google Apps Script
 
-4. Ejecuta la aplicación:
-bash
-uv run flask run --debug
+1. Crea un proyecto en [Google Apps Script](https://script.google.com)
+2. Copia el contenido del archivo `APPSCRIPT_VALIDACION_TIEMPO.js`
+3. Configura tus hojas de Google Sheets con las siguientes pestañas:
+   - **Attendees**: Datos de participantes
+   - **Sessions**: Configuración de ponencias
+   - **GeneralAttendance**: Registro de asistencia general
+   - **SessionAttendance**: Registro por ponencia
+4. Despliega como Web App y copia la URL
+5. Actualiza `APPSCRIPT_BASE_URL` en `docker-compose.yml` o `.env`
 
+### Variables de Entorno
 
-## Configuración de Google Apps Script
+```bash
+FLASK_ENV=development
+FLASK_DEBUG=1
+APPSCRIPT_BASE_URL=<tu-url-de-appscript>
+```
 
-El sistema requiere *6 endpoints* de Google Apps Script para funcionar:
+## 📊 Estructura de Google Sheets
 
-### 📥 *GET Endpoints* (4 endpoints)
+### Hoja: Attendees
+```
+NOMBRES | APELLIDOS | E-MAIL | CELULAR | DNI
+```
 
-#### 1. Buscar Participante por DNI
+### Hoja: Sessions
+```
+ID | Ponente | Tipo | Eje | Cupos totales | Dia | Duracion | Tiempo Inicio | Tiempo Fin | Horas
+```
 
-GET ?action=getAttendeeByDNI&dni={dni}
+### Hoja: GeneralAttendance
+```
+Doc. Identidad | Marca de tiempo | Kit Entregado
+```
 
-*Input*: dni (8 dígitos)
-*Output*:
-json
-{
-  "dni": "12345678",
-  "nombre": "Juan Pérez", 
-  "asistencia_general": true,
-  "session_id_1": false,
-  "ponencia_tech": true
-}
+### Hoja: SessionAttendance
+```
+Doc. Identidad | Sesion ID | Marca de tiempo
+```
 
+## 🎯 Casuísticas y Respuestas Esperadas
 
-#### 2. Lista de Ponencias Disponibles
+### 1️⃣ Asistencia General
 
-GET ?action=getSessionsList
-
-*Input*: Ninguno
-*Output*:
-json
-[
-  {
-    "id": "session_id_1",
-    "name": "Conferencia de Marketing Digital",
-    "description": "Estrategias modernas"
-  }
-]
-
-
-#### 3. Capacidad de Ponencias
-
-GET ?action=getSessionsCapacity
-
-*Input*: Ninguno
-*Output*:
-json
-{
-  "session_id_1": {
-    "available": 25,
-    "total": 50,
-    "name": "Conferencia de Marketing Digital"
-  }
-}
-
-
-#### 4. Exportar Datos de Asistentes
-
-GET ?action=exportAttendeesData
-
-*Input*: Ninguno
-*Output*:
-json
-{
-  "csv_data": "DNI,Nombre,Asistencia General,Conferencia...\n12345678,Juan Pérez,Sí,No..."
-}
-
-
-### 📤 *POST Endpoints* (2 endpoints)
-
-#### 5. Registrar Asistencia General
-
-POST {APPSCRIPT_URL}
-
-*Input*:
-json
-{
-  "action": "registerGeneralAttendance",
-  "dni": "12345678",
-  "timestamp": "2025-01-20T10:30:00.000Z"
-}
-
-*Output*:
-json
-{
-  "registered": true,
-  "dni": "12345678",
-  "timestamp": "2025-01-20T10:30:00.000Z"
-}
-
-
-#### 6. Registrar en Ponencia
-
-POST {APPSCRIPT_URL}
-
-*Input*:
-json
-{
-  "action": "registerSessionAttendance",
-  "dni": "12345678",
-  "session_id": "session_id_1",
-  "timestamp": "2025-01-20T14:30:00.000Z"
-}
-
-*Output*:
-json
-{
-  "registered": true,
-  "dni": "12345678",
-  "session_id": "session_id_1",
-  "session_name": "Conferencia de Marketing Digital"
-}
-
-
-### 🔧 *Validaciones requeridas en Apps Script*:
-
-- *getAttendeeByDNI*: Verificar DNI existe en hoja "Asistentes"
-- *getSessionsList*: Leer hoja "Ponencias" y retornar todas las filas
-- *getSessionsCapacity*: Calcular cupos disponibles (total - registrados)
-- *registerGeneralAttendance*: Validar DNI y marcar TRUE en "Asistencia General"
-- *registerSessionAttendance*: Validar asistencia general previa + cupos disponibles
-- *exportAttendeesData*: Generar CSV con todas las columnas dinámicamente
-
-## API Endpoints
-
-### 1. Lista de Ponencias Disponibles
-
-GET /api/v1/sessions
-
-*Input*: Ninguno
-*Output*:
-json
+#### Caso 1.1: Primera vez (Día 1)
+**Acción**: Registrar DNI nuevo  
+**Respuesta Esperada**:
+```json
 {
   "success": true,
-  "data": [
-    {
-      "id": "session_id_1",
-      "name": "Conferencia de Marketing Digital",
-      "description": "Estrategias modernas"
-    }
-  ],
-  "message": "Lista de ponencias obtenida exitosamente"
+  "message": "Asistencia general registrada exitosamente. Kit entregado",
+  "kit_entregado": true
 }
+```
+**UI**: 🎁 Mensaje de éxito con icono de regalo
 
-
-### 2. Búsqueda de Asistentes
-
-GET /api/v1/attendees/search/{dni}
-
-*Input*: DNI de 8 dígitos en la URL
-*Output*:
-json
+#### Caso 1.2: Duplicado mismo día
+**Acción**: Intentar registrar mismo DNI el mismo día  
+**Respuesta Esperada**:
+```json
 {
   "success": true,
+  "message": "Ya registró asistencia hoy. Kit entregado anteriormente",
+  "kit_entregado": true,
+  "already_registered_today": true
+}
+```
+**UI**: ℹ️ Mensaje informativo
+
+#### Caso 1.3: Segundo día (sin kit)
+**Acción**: Registrar mismo DNI al día siguiente  
+**Respuesta Esperada**:
+```json
+{
+  "success": true,
+  "message": "Asistencia general registrada exitosamente. Kit ya entregado anteriormente",
+  "kit_entregado": false
+}
+```
+**UI**: ✅ Mensaje de éxito, sin icono de regalo
+
+---
+
+### 2️⃣ Registro en Ponencias
+
+#### Caso 2.1: Registro exitoso
+**Acción**: Registrar DNI con asistencia general en ponencia dentro de ventana válida  
+**Respuesta Esperada**:
+```json
+{
+  "success": true,
+  "message": "Registrado exitosamente en CHARLA 3",
   "data": {
     "dni": "12345678",
-    "nombre": "Juan Pérez",
-    "asistencia_general": true,
-    "session_id_1": false,
-    "ponencia_tech": true
-  },
-  "message": "Asistente encontrado"
-}
-
-
-### 3. Registro de Asistencia General
-
-POST /api/v1/attendees/general
-
-*Input*:
-json
-{"dni": "12345678"}
-
-*Output*:
-json
-{
-  "success": true,
-  "message": "Asistencia general registrada exitosamente",
-  "data": {
-    "dni": "12345678",
-    "registered_at": "2025-01-20T10:30:00"
+    "session_id": "sesion_3",
+    "session_name": "CHARLA 3"
   }
 }
+```
+**UI**: ✅ Toast de éxito
 
-
-### 4. Consulta de Capacidad de Ponencias
-
-GET /api/v1/sessions/capacity
-
-*Input*: Ninguno
-*Output*:
-json
+#### Caso 2.2: Sin asistencia general previa
+**Acción**: Intentar registrar en ponencia sin tener asistencia general  
+**Respuesta Esperada**:
+```json
 {
-  "success": true,
-  "data": {
-    "session_id_1": {
-      "available": 25,
-      "total": 50,
-      "name": "Conferencia de Marketing Digital"
-    }
-  },
-  "message": "Capacidad de ponencias obtenida exitosamente"
+  "success": false,
+  "message": "Debe registrar asistencia general primero"
 }
+```
+**UI**: ❌ Toast de error
 
-
-### 5. Registro en Ponencias
-
-POST /api/v1/sessions/register
-
-*Input*:
-json
-{"dni": "12345678", "session_id": "session_id_1"}
-
-*Output*:
-json
+#### Caso 2.3: Ya registrado en la ponencia
+**Acción**: Intentar registrarse dos veces en la misma ponencia  
+**Respuesta Esperada**:
+```json
 {
-  "success": true,
-  "message": "Registrado exitosamente en Conferencia de Marketing Digital",
-  "data": {
-    "dni": "12345678",
-    "session_id": "session_id_1",
-    "session_name": "Conferencia de Marketing Digital"
-  }
+  "success": false,
+  "message": "Ya está registrado en CHARLA 3"
 }
+```
+**UI**: ℹ️ Toast informativo
 
+#### Caso 2.4: Sin cupos disponibles
+**Acción**: Intentar registrarse en ponencia llena  
+**Respuesta Esperada**:
+```json
+{
+  "success": false,
+  "message": "No hay cupos disponibles para CHARLA 3"
+}
+```
+**UI**: 🚫 Toast de advertencia
 
-### 6. Exportación de Datos
+---
 
-GET /api/v1/attendees/export
+### 3️⃣ Validaciones de Tiempo
 
-*Input*: Ninguno
-*Output*: Archivo CSV o JSON con todos los datos de asistencia
+#### Caso 3.1: Demasiado pronto (>1 hora antes)
+**Acción**: Intentar registrarse más de 1 hora antes del inicio  
+**Respuesta Esperada**:
+```json
+{
+  "success": false,
+  "message": "Demasiado pronto para CHARLA 3. Falta 2 hora(s) y 30 minuto(s) para el inicio. Solo puede registrarse hasta 1 hora antes.",
+  "too_early": true,
+  "hours": 2,
+  "minutes": 30
+}
+```
+**UI**: ⏳ Toast de advertencia
 
-## Uso
+#### Caso 3.2: Ventana válida (1 hora antes hasta inicio)
+**Acción**: Registrarse entre 1 hora antes y el inicio  
+**Respuesta Esperada**: ✅ Registro exitoso (igual que Caso 2.1)
 
-### 1. Registro de Asistencia General
+#### Caso 3.3: Durante la sesión (0-15 minutos después)
+**Acción**: Registrarse hasta 15 minutos después del inicio  
+**Respuesta Esperada**: ✅ Registro exitoso (igual que Caso 2.1)
 
-1. Navega a la sección "Registro"
-2. Escanea el código de barras del DNI o ingresa manualmente
-3. Verifica la información del participante
-4. Confirma el registro
+#### Caso 3.4: Demasiado tarde (>15 minutos después)
+**Acción**: Intentar registrarse más de 15 minutos después del inicio  
+**Respuesta Esperada**:
+```json
+{
+  "success": false,
+  "message": "Muy tarde para CHARLA 3. La sesión inició hace 20 minuto(s). Solo se permite registro hasta 15 minutos después del inicio.",
+  "too_late": true,
+  "minutes_late": 20
+}
+```
+**UI**: ⏰ Toast de error
 
-### 2. Registro a Ponencias
+#### Caso 3.5: Sesión finalizada
+**Acción**: Intentar registrarse después de la hora de fin  
+**Respuesta Esperada**:
+```json
+{
+  "success": false,
+  "message": "La sesión CHARLA 3 ya finalizó"
+}
+```
+**UI**: 🕐 Toast de advertencia
 
-1. Navega a la sección "Ponencias"
-2. Escanea el DNI del participante
-3. Selecciona la ponencia deseada
-4. El sistema valida automáticamente:
-   - Asistencia general previa
-   - Disponibilidad de cupos
-   - Estado previo de registro
+---
 
-### 3. Exportación de Datos
+### 4️⃣ Validación de Solapamiento
 
-1. Navega a la sección "Exportar"
-2. Selecciona el formato deseado (CSV/JSON)
-3. Descarga el archivo generado
+#### Caso 4.1: Sesiones simultáneas
+**Acción**: Intentar registrarse en dos sesiones con horarios solapados  
+**Respuesta Esperada**:
+```json
+{
+  "success": false,
+  "message": "Esta sesión se solapa con CHARLA 2",
+  "conflict_with": "sesion_2",
+  "conflict_name": "CHARLA 2"
+}
+```
+**UI**: ⏰ Toast de advertencia con mensaje de conflicto
 
-## Desarrollo
+---
 
-### Estructura del Proyecto
+## ⏰ Ventana de Registro para Ponencias
 
-registro-asistencia/
-├── app.py                 # Aplicación Flask principal
-├── templates/             # Templates HTML
-│   ├── base.html         # Template base
-│   ├── index.html        # Página principal
-│   ├── register.html     # Registro general
-│   ├── sessions.html     # Ponencias
-│   └── export.html       # Exportación
-├── static/               # Archivos estáticos
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   LÍNEA DE TIEMPO                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ❌ Más de 1 hora    │  ✅ 1 hora antes  │  ✅ +15 min │  ❌ Después │
+│  "Demasiado pronto"  │   VENTANA DE      │  Permitido  │ Finalizada │
+│                      │   REGISTRO        │             │            │
+└─────────────────────────────────────────────────────────────┘
+                       ▲                   ▲             ▲
+                    INICIO               +15min        FIN
+```
+
+| Momento | ¿Puede registrarse? | Mensaje |
+|---------|---------------------|---------|
+| Más de 1 hora antes | ❌ No | ⏳ Demasiado pronto |
+| 1 hora antes - inicio | ✅ **SÍ** | ✅ Registro exitoso |
+| Inicio - +15 min | ✅ **SÍ** | ✅ Registro exitoso |
+| Más de +15 min | ❌ No | ⏰ Demasiado tarde |
+| Después del fin | ❌ No | 🕐 Sesión finalizada |
+
+---
+
+## 🌐 Endpoints de la API
+
+### Asistencia General
+
+**`GET /api/v1/attendees/search/{dni}`**  
+Busca un asistente por DNI
+
+**`POST /api/v1/attendees/general`**  
+Registra asistencia general
+```json
+{
+  "dni": "12345678"
+}
+```
+
+### Ponencias
+
+**`GET /api/v1/sessions`**  
+Lista todas las ponencias disponibles
+
+**`GET /api/v1/sessions/capacity`**  
+Obtiene capacidad de todas las ponencias
+
+**`POST /api/v1/sessions/register`**  
+Registra asistencia en una ponencia
+```json
+{
+  "dni": "12345678",
+  "session_id": "sesion_3"
+}
+```
+
+### Exportación
+
+**`GET /api/v1/attendees/export`**  
+Exporta datos de asistentes en CSV/JSON
+
+---
+
+## 🎨 Interfaz de Usuario
+
+### Páginas
+
+- **`/`** - Página principal
+- **`/register`** - Registro de asistencia general
+- **`/sessions`** - Registro en ponencias
+- **`/export`** - Exportación de datos
+
+### Iconos Contextuales
+
+| Icono | Significado |
+|-------|-------------|
+| 🎁 | Kit entregado |
+| ✅ | Operación exitosa |
+| ℹ️ | Información |
+| ⏳ | Demasiado pronto |
+| ⏰ | Conflicto/Demasiado tarde |
+| 🚫 | Sin cupos |
+| 🕐 | Sesión finalizada |
+| ❌ | Error |
+
+---
+
+## 🧪 Testing
+
+Ejecutar pruebas completas:
+
+```bash
+python test_completo.py
+```
+
+El script prueba:
+- ✅ Endpoints de infraestructura
+- ✅ Registro general con kit
+- ✅ Validaciones de ponencias
+- ✅ Validaciones de tiempo
+- ✅ Validaciones de capacidad
+- ✅ Validaciones de solapamiento
+
+---
+
+## 📁 Estructura del Proyecto
+
+```
+Sistema_Asistencia_CONCEPMI/
+├── app.py                              # Aplicación Flask principal
+├── docker-compose.yml                  # Configuración Docker
+├── Dockerfile                          # Imagen Docker
+├── pyproject.toml                      # Dependencias Python
+├── APPSCRIPT_VALIDACION_TIEMPO.js     # Código de Google Apps Script
+├── static/
 │   ├── css/
-│   │   └── style.css     # Estilos CSS
+│   │   └── style.css                  # Estilos personalizados
 │   └── js/
-│       └── main.js       # JavaScript principal
-├── pyproject.toml        # Configuración UV
-├── Dockerfile            # Configuración Docker
-└── docker-compose.yml    # Docker Compose
+│       └── main.js                    # JavaScript común
+├── templates/
+│   ├── base.html                      # Template base
+│   ├── index.html                     # Página principal
+│   ├── register.html                  # Registro general
+│   ├── sessions.html                  # Registro ponencias
+│   └── export.html                    # Exportación datos
+└── test_completo.py                   # Script de pruebas
+```
 
+---
 
-### Scripts de Desarrollo
+## 🐛 Troubleshooting
 
-bash
-# Ejecutar en modo desarrollo
-uv run flask run --debug
+### Error: "DNI no encontrado"
+- Verificar que el DNI exista en la hoja "Attendees" de Google Sheets
+- Asegurarse que el DNI tenga exactamente 8 dígitos
 
-# Instalar nuevas dependencias
-uv add package-name
+### Error: "Cabeceras inválidas en hoja Sessions"
+- Verificar que las columnas de la hoja "Sessions" coincidan exactamente con:
+  ```
+  ID | Ponente | Tipo | Eje | Cupos totales | Dia | Duracion | Tiempo Inicio | Tiempo Fin | Horas
+  ```
 
-# Ejecutar tests (cuando se implementen)
-uv run pytest
+### Escaneo de cámara no funciona
+- Asegurar que el navegador tenga permisos de cámara
+- Usar HTTPS en producción (getUserMedia requiere conexión segura)
+- Probar en navegador diferente (Chrome/Firefox recomendados)
 
-# Formatear código
-uv run black .
+### Validaciones de tiempo no funcionan
+- Verificar que la columna "Dia" tenga formato correcto (e.g., "15-nov")
+- Verificar que "Tiempo Inicio" y "Tiempo Fin" estén en formato 24h (e.g., "14:00")
+- Asegurarse de haber actualizado el código de AppScript con `isWithinRegistrationWindow()`
 
+---
 
-## Tecnologías Utilizadas
+## 📝 Licencia
 
-- *Backend*: Flask, Python 3.11
-- *Frontend*: Bootstrap 5, Vanilla JavaScript
-- *Scanner*: QuaggaJS para códigos de barras
-- *Containerización*: Docker, Docker Compose
-- *Gestión de Paquetes*: UV
-- *Storage*: Google Sheets via Apps Script
+Este proyecto es de uso interno para eventos CONCEPMI.
 
-## Características de Seguridad
+## 👥 Contribuciones
 
-- Validación de entrada de DNI
-- CORS habilitado para desarrollo
-- Manejo de errores robusto
-- Validación de estado de red
-- Almacenamiento local para cache
+Para contribuir al proyecto:
 
-## Próximas Mejoras
+1. Fork el repositorio
+2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
 
-- [ ] Autenticación de usuarios
-- [ ] Panel de administración
-- [ ] Reportes avanzados
-- [ ] Notificaciones push
-- [ ] Cache Redis
-- [ ] Tests automatizados
-- [ ] Logging avanzado
+---
 
-## Soporte
+## 📞 Soporte
 
-Para soporte técnico o preguntas, contacta al equipo de desarrollo.
+Para problemas o preguntas, contactar al equipo de desarrollo.
 
-## Licencia
+---
 
-Este proyecto es de uso interno organizacional.
+**Versión**: 1.0.0  
+**Última actualización**: Noviembre 2025
