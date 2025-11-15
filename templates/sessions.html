@@ -229,13 +229,13 @@ async function searchAttendee() {
     showLoading(true);
     
     try {
-        const response = await fetch(/api/v1/attendees/search/${dni});
+        const response = await fetch('/api/v1/attendees/search/' + dni);
         
         if (!response.ok) {
             if (response.status === 500) {
                 showToast('Error del Servidor', 'Hubo un error con el servidor. Inténtalo más tarde.', 'error');
             } else {
-                showToast('Error', Error ${response.status}: ${response.statusText}, 'error');
+                showToast('Error', 'Error ' + response.status + ': ' + response.statusText, 'error');
             }
             hideAttendeeCard();
             hideSessionsCard();
@@ -279,7 +279,7 @@ async function loadSessionsList() {
             if (response.status === 500) {
                 console.error('Error del servidor al cargar sesiones');
             } else {
-                console.error(Error ${response.status} al cargar sesiones);
+                console.error('Error ' + response.status + ' al cargar sesiones');
             }
             sessionsList = [];
             return;
@@ -481,7 +481,7 @@ async function registerSessionAttendance(sessionId, sessionName) {
     // Show specific loading message
     const loadingModal = document.getElementById('loadingModal');
     const loadingText = loadingModal.querySelector('p');
-    loadingText.textContent = Registrando en ${sessionName}...;
+    loadingText.textContent = 'Registrando en ' + sessionName + '...';
     
     try {
         const response = await fetch('/api/v1/sessions/register', {
@@ -499,7 +499,7 @@ async function registerSessionAttendance(sessionId, sessionName) {
             if (response.status === 500) {
                 showToast('Error del Servidor', 'Hubo un error con el servidor. Inténtalo más tarde.', 'error');
             } else {
-                showToast('Error', Error ${response.status}: ${response.statusText}, 'error');
+                showToast('Error', 'Error ' + response.status + ': ' + response.statusText, 'error');
             }
             // Reset loading message
             const loadingModal = document.getElementById('loadingModal');
@@ -531,7 +531,38 @@ async function registerSessionAttendance(sessionId, sessionName) {
             }
             
         } else {
-            showToast('Error', result.message || 'Error al registrar en ponencia', 'error');
+            // Manejar diferentes tipos de errores
+            let errorIcon = '❌';
+            let errorMessage = result.message || 'Error al registrar en ponencia';
+            
+            if (result.too_early) {
+                errorIcon = '⏳';
+                showToast('Demasiado Pronto', errorIcon + ' ' + result.message, 'warning');
+            } else if (result.too_late) {
+                errorIcon = '⏰';
+                showToast('Demasiado Tarde', errorIcon + ' ' + result.message, 'error');
+            } else if (result.message && result.message.includes('ya finalizó')) {
+                errorIcon = '🕐';
+                showToast('Sesión Finalizada', errorIcon + ' ' + result.message, 'warning');
+            } else if (result.message && result.message.includes('se solapa')) {
+                errorIcon = '⏰';
+                // Si hay conflicto de horario, mostrar información adicional
+                if (result.conflict_name) {
+                    showToast('Conflicto de Horario', 
+                        errorIcon + ' ' + result.message + '. No puede inscribirse en dos sesiones simultáneas.', 
+                        'warning');
+                } else {
+                    showToast('Conflicto de Horario', errorIcon + ' ' + result.message, 'warning');
+                }
+            } else if (result.message && result.message.includes('cupos')) {
+                errorIcon = '🚫';
+                showToast('Sin Cupos', errorIcon + ' ' + result.message, 'warning');
+            } else if (result.message && result.message.includes('Ya está registrado')) {
+                errorIcon = 'ℹ️';
+                showToast('Ya Registrado', errorIcon + ' ' + result.message, 'info');
+            } else {
+                showToast('Error', errorIcon + ' ' + errorMessage, 'error');
+            }
         }
     } catch (error) {
         console.error('Error:', error);
@@ -553,7 +584,7 @@ async function loadCapacityInfo() {
             if (response.status === 500) {
                 console.error('Error del servidor al cargar capacidad');
             } else {
-                console.error(Error ${response.status} al cargar capacidad);
+                console.error('Error ' + response.status + ' al cargar capacidad');
             }
             return;
         }

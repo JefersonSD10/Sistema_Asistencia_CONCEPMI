@@ -192,12 +192,13 @@ async function searchAttendee() {
             currentAttendee = result.data;
             displayAttendeeInfo(result.data);
             
-            // Verificar si ya tiene asistencia general
+            // Siempre mostrar el botón de registro para permitir registros diarios
+            // El backend maneja la lógica de si ya se registró hoy o no
+            document.getElementById('registerBtn').style.display = 'block';
+            
+            // Mostrar info si ya tiene asistencia general (pero permitir registrar de nuevo)
             if (result.data.asistencia_general) {
-                showToast('Información', 'Este participante ya tiene asistencia general registrada', 'warning');
-                document.getElementById('registerBtn').style.display = 'none';
-            } else {
-                document.getElementById('registerBtn').style.display = 'block';
+                showToast('Información', 'Este participante tiene registros previos. Puede registrar asistencia para hoy.', 'info');
             }
         } else {
             showToast('No encontrado', 'Participante no encontrado en la base de datos', 'warning');
@@ -244,13 +245,16 @@ async function registerAttendance() {
         const result = await response.json();
         
         if (result.success) {
-            showToast('Éxito', 'Asistencia registrada exitosamente', 'success');
+            // Mostrar mensaje que incluye info del kit
+            const kitIcon = result.kit_entregado ? '🎁 ' : '';
+            showToast('Éxito', kitIcon + result.message, 'success');
             
-            // Agregar a registros recientes
+            // Agregar a registros recientes con info del kit
             addToRecentRegistrations({
                 dni: currentAttendee.dni,
                 nombre: currentAttendee.nombre,
-                timestamp: new Date().toLocaleString()
+                timestamp: result.data.timestamp || new Date().toISOString(),
+                kit_entregado: result.kit_entregado
             });
             
             // Limpiar formulario
@@ -361,6 +365,21 @@ function addToRecentRegistrations(registration) {
     displayRecentRegistrations();
 }
 
+function formatTimestamp(timestamp) {
+    try {
+        const date = new Date(timestamp);
+        return date.toLocaleString('es-PE', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (e) {
+        return timestamp;
+    }
+}
+
 function displayRecentRegistrations() {
     const container = document.getElementById('recentRegistrations');
     
@@ -373,17 +392,23 @@ function displayRecentRegistrations() {
         return;
     }
     
-    container.innerHTML = recentRegistrations.map(reg => `
+    container.innerHTML = recentRegistrations.map(reg => {
+        const kitBadge = reg.kit_entregado 
+            ? '<span class="badge bg-success ms-2" style="font-size: 0.65rem;">🎁 Kit</span>' 
+            : '';
+        
+        return `
         <div class="list-group-item">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
-                    <h6 class="mb-1">${reg.nombre}</h6>
+                    <h6 class="mb-1">${reg.nombre}${kitBadge}</h6>
                     <p class="mb-1 text-muted small">DNI: ${reg.dni}</p>
                 </div>
-                <small class="text-muted">${reg.timestamp}</small>
+                <small class="text-muted">${formatTimestamp(reg.timestamp)}</small>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function clearRecentRegistrations() {
